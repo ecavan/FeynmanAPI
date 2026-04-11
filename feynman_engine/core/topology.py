@@ -92,15 +92,52 @@ def classify_topology(diagram: Diagram) -> str:
 
     # ── One loop ──────────────────────────────────────────────────────────
     if loops == 1:
-        if n_internal == 2:
-            return "self-energy"
-        if n_internal == 3:
-            return "vertex correction"
-        if n_internal == 4:
+        # Build a multigraph so parallel edges (bubbles / self-energies) are
+        # distinguished from single edges.  nx.Graph collapses them and loses
+        # the structure entirely.
+        MG = nx.MultiGraph()
+        for v in diagram.vertices:
+            MG.add_node(v.id)
+        for e in diagram.edges:
+            if not e.is_external:
+                MG.add_edge(e.start_vertex, e.end_vertex)
+
+        # Tadpole: any self-loop (vertex connects to itself)
+        for u, v in MG.edges():
+            if u == v:
+                return "tadpole"
+
+        # Self-energy / bubble: any pair of vertices connected by 2+ propagators
+        seen = set()
+        for u, v, _ in MG.edges(keys=True):
+            key = (min(u, v), max(u, v))
+            if key in seen:
+                return "self-energy"
+            seen.add(key)
+
+        # For the remaining diagrams, find the minimum cycle length using
+        # the collapsed simple graph (no parallel edges remain at this point).
+        G = nx.Graph()
+        G.add_nodes_from(MG.nodes())
+        G.add_edges_from((u, v) for u, v, _ in MG.edges(keys=True))
+
+        try:
+            cycles = nx.minimum_cycle_basis(G)
+        except Exception:
+            return f"1-loop ({n_internal} props)"
+
+        if not cycles:
+            return f"1-loop ({n_internal} props)"
+
+        min_len = min(len(c) for c in cycles)
+        if min_len == 3:
+            return "triangle"
+        elif min_len == 4:
             return "box"
-        if n_internal == 1:
-            return "tadpole"
-        return f"1-loop ({n_internal} props)"
+        elif min_len == 5:
+            return "pentagon"
+        else:
+            return f"1-loop-{min_len}"
 
     # ── Higher loops ──────────────────────────────────────────────────────
     return f"{loops}-loop"
