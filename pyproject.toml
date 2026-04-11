@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "feynman-engine"
+version = "0.1.0"
+description = "Feynman diagram engine wrapping QGRAF and TikZ-Feynman"
+requires-python = ">=3.11"
+dependencies = [
+    "networkx>=3.2",
+    "pydantic>=2.5",
+    "jinja2>=3.1",
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "sympy>=1.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.26",
+]
+
+[project.scripts]
+feynman = "feynman_engine.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["feynman_engine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

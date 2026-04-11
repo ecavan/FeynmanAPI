@@ -1,0 +1,40 @@
+D 1 + 1
+
+I ep -1 p1
+
+I em -3 p2
+
+
+O ep -2 q1
+
+O em -4 q2
+
+
+P A 1 A 2
+
+
+V em(-3) ep(-1) A(1)
+
+V em(-2) ep(-4) A(2)
+
+END
+D 2 - 1
+
+I ep -1 p1
+
+I em -3 p2
+
+
+O ep -2 q1
+
+O em -4 q2
+
+
+P A 1 A 2
+
+
+V em(-2) ep(-1) A(1)
+
+V em(-3) ep(-4) A(2)
+
+END

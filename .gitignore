@@ -1,0 +1,30 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# QGRAF binary (compiled locally — not checked in)
+bin/qgraf
+bin/qgraf_pipe
+
+# Compiled outputs
+*.pdf
+*.log
+*.aux
+
+# Secrets / local config
+.env
+*.local
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
