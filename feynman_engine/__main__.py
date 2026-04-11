@@ -5,6 +5,7 @@ import sys
 def main():
     import argparse
     import json
+    from pathlib import Path
 
     parser = argparse.ArgumentParser(
         prog="feynman",
@@ -27,6 +28,18 @@ def main():
                             choices=["tikz", "svg", "png"])
     gen_parser.add_argument("--output-dir", default=".", help="Directory to write output files")
 
+    # ── install-qgraf ─────────────────────────────────────────────────────
+    qgraf_parser = subparsers.add_parser(
+        "install-qgraf",
+        help="Compile QGRAF from the bundled source archive",
+    )
+    qgraf_parser.add_argument(
+        "--target",
+        default=None,
+        help="Optional output path for the compiled qgraf binary",
+    )
+    qgraf_parser.add_argument("--force", action="store_true")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -39,7 +52,6 @@ def main():
         )
 
     elif args.command == "generate":
-        from pathlib import Path
         from feynman_engine.engine import FeynmanEngine
 
         engine = FeynmanEngine()
@@ -70,6 +82,13 @@ def main():
                 print(f"  Wrote {img_path}")
 
         print(f"\nSummary: {json.dumps(result.summary, indent=2)}")
+
+    elif args.command == "install-qgraf":
+        from feynman_engine.qgraf import build_qgraf
+
+        target = Path(args.target).expanduser() if args.target else None
+        built = build_qgraf(target=target, force=args.force)
+        print(f"Built QGRAF at {built}")
 
 
 if __name__ == "__main__":

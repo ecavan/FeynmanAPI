@@ -18,6 +18,7 @@ from feynman_engine.core.generator import generate_diagrams, backend_name, qgraf
 from feynman_engine.core.models import Diagram, GenerationResult
 from feynman_engine.physics.registry import TheoryRegistry
 from feynman_engine.physics.translator import parse_process
+from feynman_engine.qgraf import qgraf_source_available
 from feynman_engine.render.compiler import compile_all
 from feynman_engine.render.tikz import diagrams_to_tikz
 
@@ -37,8 +38,7 @@ class FeynmanEngine:
     """
     High-level API for generating and rendering Feynman diagrams.
 
-    Tree-level generation works out of the box — no external tools needed.
-    Loop diagrams require QGRAF (see contrib/qgraf/ for installation).
+    QGRAF is required for all diagram generation in this project.
     """
 
     def generate(
@@ -56,8 +56,8 @@ class FeynmanEngine:
         Args:
             process:       e.g. "e+ e- -> mu+ mu-"
             theory:        "QED", "QCD", or "EW"
-            loops:         0 = tree-level (works without QGRAF)
-                           1+ = requires QGRAF binary in bin/
+            loops:         0 = tree-level
+                           1+ = loop-level
             output_format: "svg"   — rendered image (needs lualatex + pdf2svg)
                            "tikz"  — raw LaTeX source (no extra tools needed)
                            "png" / "pdf" — needs lualatex + pdf2svg
@@ -144,6 +144,7 @@ class FeynmanEngine:
         return {
             "backend": backend_name(),
             "qgraf_available": qgraf_available(),
+            "qgraf_source_available": qgraf_source_available(),
             "lualatex_available": lualatex_found,
             "pdf2svg_available": bool(shutil.which("pdf2svg")),
             "theories": self.list_theories(),

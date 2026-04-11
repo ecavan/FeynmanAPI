@@ -30,6 +30,12 @@ feynman = "feynman_engine.__main__:main"
 where = ["."]
 include = ["feynman_engine*"]
 
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+feynman_engine = ["resources/qgraf/*.tgz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

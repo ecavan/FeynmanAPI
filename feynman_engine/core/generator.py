@@ -1,13 +1,12 @@
 """
-Diagram generator — selects the best available backend automatically.
+Diagram generator — QGRAF-first and QGRAF-required.
 
 Priority:
   1. bin/qgraf_pipe  (patched stdin/stderr version — from QGraf GitLab)
   2. bin/qgraf       (standard file-based QGRAF binary)
-  3. Python enumerator (built-in, no external tools required)
 
-For loops > 0, only QGRAF can enumerate diagrams.  The Python enumerator
-raises NotImplementedError for loops > 0, prompting the user to install QGRAF.
+If no QGRAF binary is available, generation fails immediately. This project
+does not maintain a separate pure-Python diagram enumeration path anymore.
 """
 from __future__ import annotations
 
@@ -18,8 +17,8 @@ import tempfile
 from pathlib import Path
 
 from feynman_engine.core.models import Diagram
-from feynman_engine.core.enumerator import enumerate_tree
 from feynman_engine.physics.translator import ProcessSpec, write_qgraf_dat
+from feynman_engine.qgraf import build_qgraf, default_qgraf_bin_target, qgraf_source_available
 
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
 _BIN_DIR = _PROJECT_ROOT / "bin"
@@ -48,6 +47,9 @@ def _qgraf_pipe_path() -> Path | None:
 def _qgraf_std_path() -> Path | None:
     if _QGRAF_STD.exists() and os.access(_QGRAF_STD, os.X_OK):
         return _QGRAF_STD
+    built_target = default_qgraf_bin_target()
+    if built_target.exists() and os.access(built_target, os.X_OK):
+        return built_target
     sys_path = shutil.which("qgraf")
     return Path(sys_path) if sys_path else None
 
@@ -56,12 +58,33 @@ def qgraf_available() -> bool:
     return _qgraf_pipe_path() is not None or _qgraf_std_path() is not None
 
 
+def require_qgraf() -> None:
+    """Raise a clear error if no usable QGRAF binary is present."""
+    if qgraf_available():
+        return
+    if qgraf_source_available():
+        try:
+            build_qgraf()
+        except Exception as exc:
+            raise QGRAFError(
+                "QGRAF is required and a bundled source archive was found, "
+                f"but auto-build failed: {exc}"
+            ) from exc
+        if qgraf_available():
+            return
+    raise QGRAFError(
+        "QGRAF is required for diagram generation, but no executable was found. "
+        "Expected one of: ./bin/qgraf_pipe, ./bin/qgraf, an auto-built binary from the "
+        "bundled source archive, or a qgraf binary on PATH."
+    )
+
+
 def backend_name() -> str:
     if _qgraf_pipe_path():
         return f"qgraf_pipe ({_qgraf_pipe_path()})"
     if _qgraf_std_path():
         return f"qgraf ({_qgraf_std_path()})"
-    return "python-enumerator"
+    return "qgraf-unavailable"
 
 
 # ── QGRAF pipe backend ────────────────────────────────────────────────────────
@@ -73,7 +96,7 @@ def _qgraf_options(filters: dict | None) -> str:
     if f.get("no_tadpoles", True):
         opts.append("notadpole")
     if f.get("one_pi", False):
-        opts.append("noexternal1pr")
+        opts.append("onepi")
     return ", ".join(opts) if opts else "notadpole"
 
 
@@ -95,7 +118,7 @@ def _run_qgraf_pipe(spec: ProcessSpec, filters: dict | None = None) -> str:
     theory_lower = spec.theory.lower()
 
     model_file = _QGRAF_CONTRIB_MODELS / f"{theory_lower}.mod"
-    style_file  = _QGRAF_CONTRIB_STYLES / "diagram.sty"
+    style_file  = _FEYNMAN_STY
 
     if not model_file.exists():
         raise QGRAFError(f"QGRAF model file not found: {model_file}")
@@ -107,7 +130,7 @@ def _run_qgraf_pipe(spec: ProcessSpec, filters: dict | None = None) -> str:
     out_str = ", ".join(spec.qgraf_outgoing)
     dat_lines = [
         "output= 'qgraf_output.txt' ;",
-        f"style= 'diagram.sty' ;",
+        f"style= 'feynman.sty' ;",
         f"model= 'model.mod' ;",
         f"in= {in_str} ;",
         f"out= {out_str} ;",
@@ -210,39 +233,25 @@ def _run_qgraf_std(spec: ProcessSpec, filters: dict | None = None) -> str:
 
 def generate_diagrams(spec: ProcessSpec, filters: dict | None = None) -> list[Diagram]:
     """
-    Generate Feynman diagrams for the given ProcessSpec.
+    Generate Feynman diagrams for the given ProcessSpec using QGRAF.
 
-    Uses QGRAF when available, falls back to the pure Python enumerator for
-    tree-level processes.
-
-    Returns a list of Diagram objects (deduplicated, topology classified).
+    Returns a list of Diagram objects classified by topology.
     """
-    # QGRAF path: supports any loop order
-    if qgraf_available():
-        from feynman_engine.core.parser import parse_qgraf_output
-        from feynman_engine.core.normalize import deduplicate
-        from feynman_engine.core.topology import classify_all
+    from feynman_engine.core.parser import parse_qgraf_output
+    from feynman_engine.core.topology import classify_all
 
-        pipe = _qgraf_pipe_path()
-        if pipe:
-            raw = _run_qgraf_pipe(spec, filters)
-        else:
-            raw = _run_qgraf_std(spec, filters)
+    require_qgraf()
 
-        diagrams = parse_qgraf_output(raw, theory=spec.theory, process=spec.raw)
-        # QGRAF guarantees no duplicate diagrams in its output — skip our
-        # graph-isomorphism deduplication (which would incorrectly merge
-        # physically distinct diagrams that share the same abstract topology,
-        # e.g. the two Compton diagrams).
-        diagrams = classify_all(diagrams)
-        return diagrams
+    pipe = _qgraf_pipe_path()
+    if pipe:
+        raw = _run_qgraf_pipe(spec, filters)
+    else:
+        raw = _run_qgraf_std(spec, filters)
 
-    # Python enumerator: tree-level only
-    if spec.loops > 0:
-        raise NotImplementedError(
-            f"Loop diagrams (loops={spec.loops}) require QGRAF. "
-            "See contrib/qgraf/ for compilation instructions, or email the "
-            "author at paulo.nogueira@tecnico.ulisboa.pt to request the source."
-        )
-
-    return enumerate_tree(spec.incoming, spec.outgoing, spec.theory)
+    diagrams = parse_qgraf_output(raw, theory=spec.theory, process=spec.raw)
+    # QGRAF guarantees no duplicate diagrams in its output — skip our
+    # graph-isomorphism deduplication (which would incorrectly merge
+    # physically distinct diagrams that share the same abstract topology,
+    # e.g. the two Compton diagrams).
+    diagrams = classify_all(diagrams)
+    return diagrams

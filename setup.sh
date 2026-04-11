@@ -34,11 +34,14 @@ echo "--- QGRAF ---"
 if [ -f bin/qgraf ]; then
   echo "✓ QGRAF binary found at bin/qgraf"
 else
-  echo "✗ QGRAF binary not found."
-  echo "  Download the source from: http://cfif.ist.utl.pt/~paulo/qgraf.html"
-  echo "  Then compile and install:"
-  echo "    mkdir -p bin"
-  echo "    gfortran -o bin/qgraf qgraf-X.X.f"
+  echo "QGRAF binary not found. Attempting to build from bundled source archive..."
+  if python -m feynman_engine install-qgraf; then
+    echo "✓ Built QGRAF from bundled source archive"
+  else
+    echo "✗ Unable to build QGRAF automatically."
+    echo "  Ensure gfortran is installed and that qgraf-3.6.10.tgz is present."
+    exit 1
+  fi
 fi
 
 # 4. Verify Python packages

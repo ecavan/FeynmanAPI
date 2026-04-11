@@ -16,6 +16,7 @@ bin/qgraf_pipe
 *.pdf
 *.log
 *.aux
+*.mod
 
 # Secrets / local config
 .env
