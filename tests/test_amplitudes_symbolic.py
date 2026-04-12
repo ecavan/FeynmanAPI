@@ -50,22 +50,21 @@ def test_bsm_symbolic_backend_support():
     assert "g_Zp_chi" in str(result.msq)
 
 
-def test_bhabha_symbolic_partial():
-    """Bhabha (s+t channel) is now computed symbolically; interference is partial."""
+def test_bhabha_symbolic_exact():
+    """Bhabha (s+t channel) including s×t cross-topology interference — exact result."""
     result = get_symbolic_amplitude("e+ e- -> e+ e-", "QED")
 
     assert result is not None
     assert result.backend == "qgraf-symbolic"
-    # Should contain s-channel and t-channel contributions
     assert "s-channel" in result.description
     assert "t-channel" in result.description
-    # Missing s-t interference is noted
-    assert "interference" in result.notes.lower()
-    # Result should be a positive real number in the massless limit
-    e, s, t = Symbol("e"), Symbol("s"), Symbol("t")
+
+    # Massless Bhabha: |M̄|² = 2e⁴[(s²+u²)/t² + (t²+u²)/s² + 2u²/(st)]
+    e, s, t, u = Symbol("e"), Symbol("s"), Symbol("t"), Symbol("u")
     massless = result.msq.subs({Symbol("m_e"): 0})
-    msq_num = float(massless.subs({e: 2, s: 10, t: -3, Symbol("u"): -7}))
-    assert msq_num > 0
+    expected = 2 * e**4 * ((s**2 + u**2) / t**2 + (t**2 + u**2) / s**2 + 2 * u**2 / (s * t))
+    vals = {e: 2, s: 10, t: -3, u: -7}  # s+t+u=0
+    assert simplify((massless - expected).subs(vals)) == 0
 
 
 def test_curated_amplitude_directly_accessible():

@@ -87,11 +87,6 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
     # Same-topology pairs: factorizable into two 4-gamma traces.
     # t×u pairs: non-factorizable 8-gamma trace, computed via _tu_cross_interference.
     # s×t pairs: require a different spinor-flow analysis; skipped with a note.
-    topologies_set = {t.topology for t in terms}
-    has_st_cross = bool(topologies_set & {"s-channel"}) and bool(
-        topologies_set & {"t-channel", "u-channel"}
-    )
-
     # Compton diagrams need their own trace structure (fermion mediator + photon pol sum).
     compton_terms = [t for t in terms if t.mediator_kind == "compton"]
     normal_terms = [t for t in terms if t.mediator_kind != "compton"]
@@ -136,7 +131,23 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
                     * cross
                     / (left.denominator * right.denominator)
                 )
-            # s×t cross-topology: requires separate spinor-flow analysis; skipped.
+            elif {left.topology, right.topology} == {"s-channel", "t-channel"}:
+                # 8-gamma cross trace for s×t (Bhabha-type) interference.
+                s_term_st = left if left.topology == "s-channel" else right
+                t_term_st = right if left.topology == "s-channel" else left
+                cross = _st_cross_interference(s_term_st, t_term_st)
+                if cross == 0:
+                    continue
+                normal_msq += (
+                    left.symmetry_factor
+                    * right.symmetry_factor
+                    * left.coupling_in
+                    * left.coupling_out
+                    * right.coupling_in
+                    * right.coupling_out
+                    * cross
+                    / (left.denominator * right.denominator)
+                )
 
     color = _qcd_color_factor(normal_terms or terms)
     msq = Rational(1, 4) * color * normal_msq + compton_msq_total
@@ -146,14 +157,11 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
     for note in notes:
         if note not in unique_notes:
             unique_notes.append(note)
-    if has_st_cross:
-        unique_notes.append(
-            "s-t cross-topology interference is omitted; "
-            "exact s×t interference requires a dedicated spinor-flow analysis."
-        )
     if len(compton_terms) > 1:
         unique_notes.append(
-            "Compton s×u cross-diagram interference is omitted (future TODO)."
+            "Compton s×u cross-diagram interference vanishes in the massless limit "
+            "(the diagonal sum already reproduces the exact Klein-Nishina formula); "
+            "massive case requires a 12-gamma trace with internal propagator numerators."
         )
 
     topologies_present = sorted({t.topology for t in terms})
@@ -478,6 +486,40 @@ def _universal_kinematics_context(diagram: Diagram) -> dict:
         frozenset({p1_lbl, q2_lbl}): (m1_sq + m4_sq - u) / 2,
         frozenset({p2_lbl, q1_lbl}): (m2_sq + m3_sq - u) / 2,
     }
+
+
+def _st_cross_interference(s_term: DiagramTerm, t_term: DiagramTerm):
+    """8-gamma trace for s×t cross-topology interference (Bhabha, massless limit).
+
+    The spin-summed M_s(M_t)* (before spin averaging) becomes a single closed
+    trace after applying spinor completeness Σ u ū = /p and Σ v v̄ = /p:
+
+        Tr[/p₁ γ^μ /p₂ γ^ν /q₂ γ_μ /q₁ γ_ν]
+
+    where μ is the contracted s-channel dummy index and ν is the contracted
+    t-channel dummy index, and:
+        p₁ = incoming e⁺ (antifermion)
+        p₂ = incoming e⁻ (fermion)
+        q₁ = outgoing e⁺ (antifermion)
+        q₂ = outgoing e⁻ (fermion)
+
+    All momenta are taken from the s-channel DiagramTerm; both the t-term coupling
+    and denominator are handled in the calling double loop.
+    """
+    i0, i1, i2, i3 = tensor_indices("i0 i1 i2 i3", LorentzIndex)
+    smu, snu = tensor_indices("smu snu", LorentzIndex)
+
+    p1 = _momentum_head(s_term.incoming_pair.antifermion.momentum)  # e⁺ incoming
+    p2 = _momentum_head(s_term.incoming_pair.fermion.momentum)       # e⁻ incoming
+    q1 = _momentum_head(s_term.outgoing_pair.antifermion.momentum)   # e⁺ outgoing
+    q2 = _momentum_head(s_term.outgoing_pair.fermion.momentum)       # e⁻ outgoing
+
+    slash = lambda head, idx: head(idx) * G(-idx)
+
+    return gamma_trace(
+        slash(p1, i0) * G(smu) * slash(p2, i1) * G(snu)
+        * slash(q2, i2) * G(-smu) * slash(q1, i3) * G(-snu)
+    )
 
 
 def _tu_cross_interference(t_term: DiagramTerm, u_term: DiagramTerm):

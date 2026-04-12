@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-science \
     texlive-fonts-recommended \
     texlive-plain-generic \
+    libgfortran5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps before copying app code so this layer is cached
