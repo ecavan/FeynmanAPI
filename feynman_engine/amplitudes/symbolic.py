@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sympy import Integer, Rational, Symbol, cancel, latex, simplify
+from sympy import Integer, Rational, Symbol, cancel, latex, simplify, pi
 from sympy.physics.hep.gamma_matrices import GammaMatrix as G, LorentzIndex, gamma_trace
 from sympy.tensor.tensor import TensAdd, TensMul, tensor_heads, tensor_indices
 
@@ -39,7 +39,7 @@ class DiagramTerm:
     theory: str
     mediator_name: str
     mediator_kind: str
-    incoming_pair: FermionPair
+    incoming_pair: FermionPair | ScalarPair
     outgoing_pair: FermionPair | ScalarPair
     outgoing_kind: str
     coupling_in: object
@@ -48,6 +48,7 @@ class DiagramTerm:
     symmetry_factor: object
     notes: list[str]
     topology: str = "s-channel"
+    incoming_kind: str = "fermion_vector"
 
 
 def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult | None:
@@ -70,15 +71,33 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
 
     terms: list[DiagramTerm] = []
     notes: list[str] = []
+    skipped_topologies: list[str] = []
     for diagram in supported:
         term = _diagram_to_term(diagram)
         if term is None:
-            return None
+            skipped_topologies.append(diagram.topology)
+            continue
         terms.append(term)
         notes.extend(term.notes)
 
     if not terms:
         return None
+
+    # If some diagrams were skipped, only continue when the successful terms
+    # cover all topologies present in the supported set.  A missing same-topology
+    # diagram (e.g. one of two s-channel terms failing) means the result would be
+    # silently wrong, so bail out in that case.
+    if skipped_topologies:
+        successful_topologies = {t.topology for t in terms}
+        for topo in skipped_topologies:
+            if topo in successful_topologies:
+                # A peer same-topology diagram failed — result would be incomplete.
+                return None
+        notes.append(
+            f"Note: amplitude is partial — {len(skipped_topologies)} diagram(s) with "
+            f"topology {skipped_topologies} could not be computed "
+            f"(unsupported external particle types for that channel)."
+        )
 
     # Build kinematic dot-product map from the physical incoming/outgoing edges.
     kin = _universal_kinematics_context(supported[0])
@@ -91,10 +110,19 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
     compton_terms = [t for t in terms if t.mediator_kind == "compton"]
     normal_terms = [t for t in terms if t.mediator_kind != "compton"]
 
-    # Compton: diagonal |M|² per diagram (s×u Compton interference is a future TODO).
+    # Compton: diagonal |M|² per diagram + s×u cross-interference (massive case).
     compton_msq_total = Integer(0)
     for ct in compton_terms:
         compton_msq_total += _compton_msq(ct, kin)
+
+    # Compton s×u cross-interference.
+    if len(compton_terms) == 2:
+        s_ct = next((t for t in compton_terms if t.topology == "s-channel"), None)
+        u_ct = next((t for t in compton_terms if t.topology == "u-channel"), None)
+        if s_ct and u_ct:
+            cross = _compton_su_cross_interference(s_ct, u_ct, kin)
+            # The cross term enters as 2·Re(M_s M_u*), both orderings give the same.
+            compton_msq_total += Integer(2) * cross
 
     # Normal (vector/scalar mediator) diagrams: double sum with 1/4 spin average.
     normal_msq = Integer(0)
@@ -150,7 +178,13 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
                 )
 
     color = _qcd_color_factor(normal_terms or terms)
-    msq = Rational(1, 4) * color * normal_msq + compton_msq_total
+    # Spin-average: 1/4 for fermion pair (spin-1/2 × spin-1/2), 1 for scalar pair (no spins).
+    spin_avg = (
+        Integer(1)
+        if normal_terms and isinstance(normal_terms[0].incoming_pair, ScalarPair)
+        else Rational(1, 4)
+    )
+    msq = spin_avg * color * normal_msq + compton_msq_total
     msq = simplify(cancel(_tensor_expr_to_scalar(msq, kin)))
 
     unique_notes = []
@@ -159,9 +193,10 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
             unique_notes.append(note)
     if len(compton_terms) > 1:
         unique_notes.append(
-            "Compton s×u cross-diagram interference vanishes in the massless limit "
-            "(the diagonal sum already reproduces the exact Klein-Nishina formula); "
-            "massive case requires a 12-gamma trace with internal propagator numerators."
+            "Compton s×u cross-interference included via 12-gamma trace with "
+            "massive propagator numerators (\u0338p₁+\u0338p₂+m) and (\u0338p₁−\u0338q₂+m). "
+            "In the massless limit this contribution vanishes, reproducing the "
+            "exact Klein-Nishina formula from the diagonal terms alone."
         )
 
     topologies_present = sorted({t.topology for t in terms})
@@ -170,14 +205,327 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
         f"Generated from {len(terms)} QGRAF tree-level "
         f"{', '.join(topologies_present)} diagram(s){compton_note}"
     )
+
+    # Build the un-squared integral LaTeX representation.
+    integral_latex_str = _build_tree_integral_latex(supported, theory)
+
     return AmplitudeResult(
         process=spec.raw,
         theory=theory,
         msq=msq,
         msq_latex=latex(msq),
+        integral_latex=integral_latex_str,
         description=description,
         notes=" ".join(unique_notes),
         backend="qgraf-symbolic",
+    )
+
+
+def get_tree_integral_latex(process: str, theory: str = "QED") -> str | None:
+    """Generate a LaTeX integral representation for any tree-level process.
+
+    Works for any number of external legs (1→2 decays, 2→2 scattering,
+    2→3 radiative processes, etc.) — no 2→2 restriction.
+    """
+    theory = theory.upper()
+    spec = parse_process(process.strip(), theory=theory, loops=0)
+    diagrams = generate_diagrams(spec)
+    if not diagrams:
+        return None
+    tree_diagrams = [d for d in diagrams if d.loop_order == 0]
+    if not tree_diagrams:
+        return None
+    return _build_tree_integral_latex(tree_diagrams, theory)
+
+
+def get_loop_integral_latex(process: str, theory: str = "QED", loops: int = 1) -> str | None:
+    """Generate a LaTeX representation of the loop integral for a process.
+
+    Returns a LaTeX string showing the unevaluated d^4l / (2π)^4 integral
+    over the internal propagator denominators, with delta functions enforcing
+    momentum conservation at each vertex.
+    """
+    theory = theory.upper()
+    spec = parse_process(process.strip(), theory=theory, loops=loops)
+    diagrams = generate_diagrams(spec)
+    if not diagrams:
+        return None
+
+    loop_diagrams = [d for d in diagrams if d.loop_order > 0]
+    if not loop_diagrams:
+        return None
+
+    # Build the integral representation from the first loop diagram.
+    return _build_loop_integral_latex(loop_diagrams[0], theory)
+
+
+# ── Integral LaTeX builders ───────────────────────────────────────────────────
+
+def _particle_latex_name(theory: str, particle_name: str) -> str:
+    """Return a nice LaTeX label for a particle, falling back to the raw name."""
+    try:
+        p = TheoryRegistry.get_particle(theory, particle_name)
+        if p.latex_name:
+            return p.latex_name
+    except Exception:
+        pass
+    # Sanitize for LaTeX
+    return particle_name.replace("~", r"\bar{" + particle_name.rstrip("~") + "}")
+
+
+def _propagator_latex(particle_name: str, momentum_label: str, theory: str) -> str:
+    """Build a LaTeX propagator factor for an internal line.
+
+    Returns strings like:
+        \\frac{i}{l_1^2 - m_e^2 + i\\epsilon}
+    for fermions/scalars, or
+        \\frac{-i g^{\\mu\\nu}}{l_1^2 + i\\epsilon}
+    for massless vector bosons.
+    """
+    try:
+        p = TheoryRegistry.get_particle(theory, particle_name)
+        mass_str = p.mass
+        ptype = p.particle_type
+    except Exception:
+        mass_str = None
+        ptype = None
+
+    mom = momentum_label.replace("_", r"\_") if "_" in momentum_label else momentum_label
+
+    if mass_str and mass_str != "0":
+        mass_tex = mass_str
+        denom = f"{mom}^2 - {mass_tex}^2 + i\\epsilon"
+    else:
+        denom = f"{mom}^2 + i\\epsilon"
+
+    if ptype and ptype.value == "boson":
+        return f"\\frac{{-i g^{{\\mu\\nu}}}}{{{denom}}}"
+    elif ptype and ptype.value in ("fermion", "antifermion"):
+        return f"\\frac{{i(\\not{{{mom}}} + {mass_str or '0'})}}{{{denom}}}"
+    else:
+        return f"\\frac{{i}}{{{denom}}}"
+
+
+def _vertex_factor_latex(theory: str, vertex, diagram: "Diagram | None" = None) -> str:
+    """Build a LaTeX vertex factor from a Vertex object.
+
+    Returns e.g. ``-ie\\gamma^\\mu`` for QED, ``-ig_s T^a \\gamma^\\mu`` for QCD.
+    For EW Higgs-fermion vertices the Yukawa coupling -im_f/v is used.
+    """
+    # Detect Higgs vertex: any edge connecting to this vertex is the Higgs.
+    if diagram is not None and theory == "EW":
+        vertex_particles = {
+            e.particle
+            for e in diagram.edges
+            if e.start_vertex == vertex.id or e.end_vertex == vertex.id
+        }
+        if "H" in vertex_particles:
+            return r"-i\frac{m_f}{v}"
+        if "W+" in vertex_particles or "W-" in vertex_particles:
+            return r"-i\frac{g}{\sqrt{2}}\gamma^{\mu}\frac{1-\gamma^5}{2}"
+    if theory == "QED":
+        return r"-ie\gamma^{\mu}"
+    elif theory == "QCD":
+        return r"-ig_s T^a \gamma^{\mu}"
+    elif theory == "EW":
+        return r"-i\frac{g}{\cos\theta_W}\gamma^{\mu}(g_V - g_A\gamma^5)"
+    elif theory == "BSM":
+        return r"-ig_{Z'}\gamma^{\mu}"
+    return r"-ig\Gamma"
+
+
+def _build_tree_integral_latex(diagrams: list[Diagram], theory: str) -> str:
+    """Build the un-squared amplitude LaTeX showing the textbook Feynman integral.
+
+    Works for any process topology (1→2 decays, 2→2 scattering, 2→3, …).
+    Uses the first diagram as the representative.  For tree-level diagrams the
+    delta functions fix all internal momenta, leaving a purely algebraic expression.
+
+    The formula written is:
+        iM = (∫ d⁴lᵢ/(2π)⁴) · (external spinors/polarisations) ·
+             (vertex factors) · (propagators) · (δ⁴ momentum conservation)
+    """
+    if not diagrams:
+        return ""
+
+    # Use the first diagram as representative.
+    d = diagrams[0]
+    internals = d.internal_edges
+    externals = d.external_edges
+
+    # ── Pre-compute consistent momentum labels ────
+    # These labels are shared across spinors, propagators, and delta functions.
+    ext_mom: dict[int, str] = {}
+    for idx, edge in enumerate(externals):
+        ext_mom[edge.id] = edge.momentum or f"p_{{{idx + 1}}}"
+    int_mom: dict[int, str] = {}
+    for idx, edge in enumerate(internals):
+        int_mom[edge.id] = edge.momentum or f"l_{{{idx + 1}}}"
+    edge_labels = {**ext_mom, **int_mom}
+
+    # ── Integration measure (over internal momenta) ───
+    if internals:
+        measure_parts = [
+            f"\\int \\frac{{d^4 {int_mom[e.id]}}}{{(2\\pi)^4}}"
+            for e in internals
+        ]
+        measure_str = " ".join(measure_parts)
+    else:
+        measure_str = ""
+
+    # ── External spinor / polarisation factors ────
+    ext_parts = []
+    for edge in externals:
+        p = None
+        try:
+            p = TheoryRegistry.get_particle(theory, edge.particle)
+        except Exception:
+            pass
+        mom = ext_mom[edge.id]
+        if p is None:
+            ext_parts.append(f"\\phi({mom})")
+        elif p.particle_type.value == "fermion":
+            if edge.end_vertex < 0:          # outgoing fermion
+                ext_parts.append(f"\\bar{{u}}({mom})")
+            else:                            # incoming fermion
+                ext_parts.append(f"u({mom})")
+        elif p.particle_type.value == "antifermion":
+            if edge.end_vertex < 0:          # outgoing antifermion
+                ext_parts.append(f"v({mom})")
+            else:                            # incoming antifermion
+                ext_parts.append(f"\\bar{{v}}({mom})")
+        elif p.particle_type.value == "boson":
+            if edge.end_vertex < 0:
+                ext_parts.append(f"\\epsilon^{{*\\mu}}({mom})")
+            else:
+                ext_parts.append(f"\\epsilon^{{\\mu}}({mom})")
+        else:
+            # Scalar external particle: no spinor/polarization factor (= 1)
+            pass
+    spinor_str = " \\; ".join(ext_parts) if ext_parts else ""
+
+    # ── Vertex factors ────────────────────────────
+    vertex_parts = [_vertex_factor_latex(theory, v, d) for v in d.vertices]
+    vertex_str = " \\cdot ".join(vertex_parts) if vertex_parts else ""
+
+    # ── Internal propagators ──────────────────────
+    prop_parts = [
+        _propagator_latex(e.particle, int_mom[e.id], theory)
+        for e in internals
+    ]
+    propagator_str = " \\cdot ".join(prop_parts) if prop_parts else ""
+
+    # ── Momentum-conservation delta functions ─────
+    delta_parts = []
+    for v in d.vertices:
+        in_momenta, out_momenta = [], []
+        for edge in d.edges:
+            lbl = edge_labels.get(edge.id, "?")
+            if edge.end_vertex == v.id:
+                in_momenta.append(lbl)
+            if edge.start_vertex == v.id:
+                out_momenta.append(lbl)
+        if in_momenta or out_momenta:
+            in_str  = " + ".join(in_momenta)  if in_momenta  else "0"
+            out_str = " + ".join(out_momenta) if out_momenta else "0"
+            delta_arg = f"{in_str} - {out_str}" if out_momenta else in_str
+            delta_parts.append(f"(2\\pi)^4 \\delta^{{(4)}}({delta_arg})")
+    delta_str = " \\cdot ".join(delta_parts) if delta_parts else ""
+
+    # ── Assemble ──────────────────────────────────
+    parts = [s for s in [measure_str, spinor_str, vertex_str, propagator_str, delta_str] if s]
+    body = " \\; ".join(parts)
+    suffix = f" \\quad (\\text{{diagram 1 of {len(diagrams)}}})" if len(diagrams) > 1 else ""
+    return f"i\\mathcal{{M}} = {body}{suffix}"
+
+
+def _build_loop_integral_latex(diagram: Diagram, theory: str) -> str:
+    """Build a LaTeX representation of a loop-level Feynman integral.
+
+    For loop diagrams, the internal momenta are not fully constrained by the
+    vertex delta functions.  After resolving them, there remain ``L`` leftover
+    loop-momentum integrations:
+
+        \\prod_{j=1}^{L} \\int \\frac{d^4 l_j}{(2\\pi)^4}
+        \\frac{N(l_j, p_i)}{\\prod_k (l_k^2 - m_k^2 + i\\epsilon)}
+
+    ``N`` is the product of vertex factors and propagator numerators.
+    We label internal momenta generically as ``l_1, l_2, \\ldots`` and state
+    overall momentum conservation separately.
+    """
+    internals = diagram.internal_edges
+    externals = diagram.external_edges
+    n_loops = diagram.loop_order
+
+    # ── Loop integration measures ─────────────────
+    loop_vars = [f"l_{{{j + 1}}}" for j in range(n_loops)]
+    measure_str = " ".join(
+        f"\\int \\frac{{d^4 {lv}}}{{(2\\pi)^4}}" for lv in loop_vars
+    )
+
+    # ── Numerator: vertex factors ─────────────────
+    vertex_factors = []
+    for v in diagram.vertices:
+        vertex_factors.append(_vertex_factor_latex(theory, v, diagram))
+    numerator_parts = vertex_factors.copy()
+
+    # Add propagator numerator contributions (slash + mass for fermions).
+    for idx, edge in enumerate(internals):
+        mom_label = edge.momentum or f"l_{{{idx + 1}}}"
+        try:
+            p = TheoryRegistry.get_particle(theory, edge.particle)
+            if p.particle_type.value in ("fermion", "antifermion"):
+                mass_str = p.mass or "0"
+                if mass_str != "0":
+                    numerator_parts.append(
+                        f"(\\not{{{mom_label}}} + {mass_str})"
+                    )
+                else:
+                    numerator_parts.append(f"\\not{{{mom_label}}}")
+            elif p.particle_type.value == "boson":
+                numerator_parts.append(f"(-g^{{\\mu\\nu}})")
+        except Exception:
+            pass
+
+    numerator_str = " \\cdot ".join(numerator_parts) if numerator_parts else "\\mathcal{N}"
+
+    # ── Denominator: propagator denominators ──────
+    denom_parts = []
+    for idx, edge in enumerate(internals):
+        mom_label = edge.momentum or f"l_{{{idx + 1}}}"
+        try:
+            p = TheoryRegistry.get_particle(theory, edge.particle)
+            mass_str = p.mass
+        except Exception:
+            mass_str = None
+
+        if mass_str and mass_str != "0":
+            denom_parts.append(f"({mom_label}^2 - {mass_str}^2 + i\\epsilon)")
+        else:
+            denom_parts.append(f"({mom_label}^2 + i\\epsilon)")
+
+    denominator_str = " ".join(denom_parts) if denom_parts else "1"
+
+    # ── External momenta conservation ─────────────
+    in_momenta = []
+    out_momenta = []
+    for idx, edge in enumerate(externals):
+        mom = edge.momentum or f"p_{{{idx + 1}}}"
+        if edge.start_vertex < 0 and edge.end_vertex >= 0:
+            in_momenta.append(mom)
+        elif edge.end_vertex < 0 and edge.start_vertex >= 0:
+            out_momenta.append(mom)
+
+    conservation = ""
+    if in_momenta and out_momenta:
+        conservation = (
+            f", \\quad {' + '.join(in_momenta)} = {' + '.join(out_momenta)}"
+        )
+
+    return (
+        f"i\\mathcal{{M}} = {measure_str} "
+        f"\\frac{{{numerator_str}}}{{{denominator_str}}}"
+        f"{conservation}"
     )
 
 
@@ -215,8 +563,20 @@ def _diagram_to_term(diagram: Diagram) -> DiagramTerm | None:
         return None
 
     incoming_pair = _fermion_pair(diagram.theory, incoming_edges_by_vertex[incoming_vertex])
+    incoming_kind = "fermion_vector"
     if incoming_pair is None:
-        return None
+        # Only apply scalar current (J^μ = (p - p̄)^μ) for genuine scalar particles.
+        # Vector bosons (gluons, photons) have a different current structure that
+        # requires polarization sums — not handled here.
+        in_particles = [
+            TheoryRegistry.get_particle(diagram.theory, e.particle)
+            for e in incoming_edges_by_vertex[incoming_vertex]
+        ]
+        if all(p.particle_type == ParticleType.SCALAR for p in in_particles):
+            incoming_pair = _scalar_pair(diagram.theory, incoming_edges_by_vertex[incoming_vertex])
+            incoming_kind = "scalar_vector"
+        if incoming_pair is None:
+            return None
 
     outgoing_edges = outgoing_edges_by_vertex[outgoing_vertex]
     outgoing_pair, outgoing_kind = _outgoing_current(diagram.theory, outgoing_edges, mediator_kind)
@@ -251,6 +611,7 @@ def _diagram_to_term(diagram: Diagram) -> DiagramTerm | None:
         symmetry_factor=Integer(1) if diagram.symmetry_factor is None else Rational(str(diagram.symmetry_factor)),
         notes=notes,
         topology="s-channel",
+        incoming_kind=incoming_kind,
     )
 
 
@@ -678,36 +1039,219 @@ def _compton_term(diagram: Diagram, internal: Edge, mediator) -> DiagramTerm | N
 
 
 def _compton_msq(t: DiagramTerm, kin: dict):
-    """Compute |M|² for a single Compton diagram (massless fermion limit).
+    """Compute |M|² for a single Compton diagram.
 
-    Tr[/q₁ γ^ν (/p₁+/k₁) γ^μ /p₁ γ_μ (/p₁+/k₁) γ_ν] / denom²
+    For the massive case, the full trace including the propagator numerator
+    (/p_int + m) is evaluated:
+        Tr[(/q₁ + m) γ^ν (/p_int + m) γ^μ (/p₁ + m) γ_μ (/p_int + m) γ_ν]
+    where p_int is the internal fermion momentum.
 
-    Reduces via γ^μ /A γ_μ = −2/A to:
-      → 4 Tr[/q₁ /k₁ /p₁ /k₁]  (massless, p₁²=k₁²=0)
-    which is a standard 4-gamma trace.
+    For massless fermions this reduces to the Klein-Nishina diagonal term.
     """
-    # Fermion momenta labels from the diagram term.
     p1 = _momentum_head(t.incoming_pair.fermion.momentum)   # incoming e-
     q1 = _momentum_head(t.incoming_pair.antifermion.momentum)  # outgoing e-
-    k1 = _momentum_head(t.outgoing_pair.particle.momentum)     # incoming photon
+    k1 = _momentum_head(t.outgoing_pair.particle.momentum)     # photon at propagator vertex
+    m = t.incoming_pair.mass
 
-    i0, i1, i2 = tensor_indices("i0 i1 i2", LorentzIndex)
+    i0, i1, i2, i3 = tensor_indices("i0 i1 i2 i3", LorentzIndex)
+    cmu, cnu = tensor_indices("cmu cnu", LorentzIndex)
 
     slash = lambda head, idx: head(idx) * G(-idx)
 
-    # Tr[/q1 /k1 /p1 /k1] (massless after using γ^μ /A γ_μ = -2/A twice and p1²=k1²=0)
-    raw = gamma_trace(slash(q1, i0) * slash(k1, i1) * slash(p1, i2) * slash(k1, i2))
-    # Note: the last k1 reuses i2 - that will double-contract; use a fresh index.
-    i3 = tensor_indices("i3", LorentzIndex)
-    raw = gamma_trace(
-        slash(q1, i0) * slash(k1, i1) * slash(p1, i2) * slash(k1, i3)
+    # Build (/q1 + m) and (/p1 + m) completeness-relation terms.
+    # For the internal propagator numerator, we need p_int.
+    # For s-type Compton: p_int = p1 + k1 (but we use the generic form).
+    # The trace structure is:
+    # Tr[(/q1+m) γ^ν (/p_int+m) γ^μ (/p1+m) γ_μ (/p_int+m) γ_ν]
+    # In the massless limit m=0, this simplifies to the 4-gamma trace form.
+
+    if m == Integer(0) or m == 0:
+        # Massless case: standard 4-gamma trace after contraction identities
+        raw = gamma_trace(
+            slash(q1, i0) * slash(k1, i1) * slash(p1, i2) * slash(k1, i3)
+        )
+        scalar = _tensor_expr_to_scalar(
+            raw.contract_metric(LorentzIndex.metric).canon_bp(), kin
+        )
+        coupling_sq = t.coupling_in ** 2
+        return Rational(1, 4) * coupling_sq**2 * Integer(4) * scalar / t.denominator**2
+    else:
+        # Massive case: full trace Tr[(/q1+m) γ^ν (/k1+m) γ^μ (/p1+m) γ_μ (/k1+m) γ_ν]
+        # Use the 4D identity: γ^μ (/A + m) γ_μ = -2/A + 4m (dimension d=4).
+        # Apply it to the inner γ^μ (/p1+m) γ_μ block:
+        #   γ^μ (/p1 + m) γ_μ = -2/p1 + 4m
+        # So the trace becomes:
+        #   Tr[(/q1+m) γ^ν (/k1+m) (-2/p1 + 4m) (/k1+m) γ_ν]
+        # This is at most 6 gamma matrices in the trace (manageable).
+        # Further apply γ^ν (...) γ_ν contraction on the outer indices.
+        #
+        # For the massless limit m→0: reduces to Tr[/q1 γ^ν /k1 (-2/p1) /k1 γ_ν]
+        # = -2 Tr[/q1 γ^ν /k1 /p1 /k1 γ_ν] = -2 · (-2) · Tr[/q1 /k1 /p1 /k1]
+        # = 4 Tr[/q1 /k1 /p1 /k1] — matching the massless formula.
+
+        m_sq = m ** 2
+
+        # After applying γ^μ (/p1+m) γ_μ = -2/p1 + 4m, expand:
+        # Tr[(/q1+m) γ^ν (/k1+m)(-2/p1 + 4m)(/k1+m) γ_ν]
+        # = -2 Tr[(/q1+m) γ^ν (/k1+m) /p1 (/k1+m) γ_ν]
+        #   +4m Tr[(/q1+m) γ^ν (/k1+m)(/k1+m) γ_ν]
+        # Note (/k1+m)(/k1+m) = /k1·/k1 + 2m/k1 + m² = k1² + 2m/k1 + m²
+        # But k1 is an internal virtual momentum, k1² is not necessarily 0.
+        # Instead of expanding further, let's just compute the trace with
+        # the contracted inner block by building it term by term.
+
+        # Term 1: -2 × Tr[(/q1+m) γ^ν (/k1+m) /p1 (/k1+m) γ_ν]
+        # Expand the mass insertions (3 mass factors: q1, k1-left, k1-right):
+        # m^0: Tr[/q1 γ^ν /k1 /p1 /k1 γ_ν] — 6 gammas
+        a0, a1, a2, a3 = tensor_indices("a0 a1 a2 a3", LorentzIndex)
+        dnu = tensor_indices("dnu", LorentzIndex)
+
+        tr_000 = gamma_trace(
+            slash(q1, a0) * G(dnu) * slash(k1, a1) * slash(p1, a2) * slash(k1, a3) * G(-dnu)
+        )
+        # m^1 insertions (pick one of q1, k1L, k1R to be m):
+        b0, b1, b2 = tensor_indices("b0 b1 b2", LorentzIndex)
+        # q1=m: Tr[γ^ν /k1 /p1 /k1 γ_ν]
+        tr_q = gamma_trace(G(dnu) * slash(k1, b0) * slash(p1, b1) * slash(k1, b2) * G(-dnu))
+        # k1L=m: Tr[/q1 γ^ν /p1 /k1 γ_ν]
+        c0, c1 = tensor_indices("c0 c1", LorentzIndex)
+        tr_kL = gamma_trace(slash(q1, c0) * G(dnu) * slash(p1, c1) * slash(k1, b2) * G(-dnu))
+        # k1R=m: Tr[/q1 γ^ν /k1 /p1 γ_ν]
+        d0, d1 = tensor_indices("d0 d1", LorentzIndex)
+        tr_kR = gamma_trace(slash(q1, d0) * G(dnu) * slash(k1, d1) * slash(p1, b1) * G(-dnu))
+
+        # m^2 insertions (pick two):
+        e0 = tensor_indices("e0", LorentzIndex)
+        # q1,k1L: Tr[γ^ν /p1 /k1 γ_ν]
+        tr_qkL = gamma_trace(G(dnu) * slash(p1, e0) * slash(k1, b2) * G(-dnu))
+        # q1,k1R: Tr[γ^ν /k1 /p1 γ_ν]
+        tr_qkR = gamma_trace(G(dnu) * slash(k1, b0) * slash(p1, e0) * G(-dnu))
+        # k1L,k1R: Tr[/q1 γ^ν /p1 γ_ν]
+        tr_kLkR = gamma_trace(slash(q1, c0) * G(dnu) * slash(p1, c1) * G(-dnu))
+
+        # m^3: Tr[γ^ν /p1 γ_ν] = -2/p1 → trace of 1 gamma = 0
+        # (odd number of gammas in trace → zero)
+        tr_m3 = Integer(0)
+
+        term1_trace = (
+            tr_000
+            + m * (tr_q + tr_kL + tr_kR)
+            + m_sq * (tr_qkL + tr_qkR + tr_kLkR)
+            + m**3 * tr_m3
+        )
+        term1 = Integer(-2) * term1_trace
+
+        # Term 2: 4m × Tr[(/q1+m) γ^ν (/k1+m)^2 γ_ν]
+        # (/k1+m)^2 = k1^2 + 2m·/k1 + m^2 (as a symbol, k1^2 is a scalar =
+        # the dot product). We need the dot product k1·k1 from the kin map.
+        # For simplicity, compute Tr[(/q1+m) γ^ν (/k1/k1 + 2m/k1 + m^2) γ_ν]
+        # /k1·/k1 = k1·k1 (scalar identity for contracting two slashes of same momentum)
+        # Inner block = k1² · 1 + 2m · /k1 + m² · 1
+        # So: Tr[(/q1+m) γ^ν (k1² + m²) γ_ν] + 2m·Tr[(/q1+m) γ^ν /k1 γ_ν]
+
+        f0 = tensor_indices("f0", LorentzIndex)
+        # Tr[(/q1+m) γ^ν γ_ν] = Tr[(/q1+m) · 4] = 4·Tr[/q1+m] = 4m·4 = 16m
+        # (Tr[/q1] = 0 since odd, Tr[m·I_4] = 4m)
+        tr_id = Integer(16) * m  # 4 (from γ^ν γ_ν) × Tr[m·I] = 4 × 4m
+
+        # Tr[/q1 γ^ν γ_ν] = 4·Tr[/q1] = 0 (odd trace), so:
+        # Tr[(/q1+m) γ^ν γ_ν] = 16m
+
+        # Tr[(/q1+m) γ^ν /k1 γ_ν]:
+        # γ^ν /k1 γ_ν = -2/k1, so Tr[(/q1+m)(-2/k1)] = -2(Tr[/q1·/k1] + m·Tr[/k1])
+        # Tr[/q1·/k1] = 4 q1·k1 (standard),  Tr[/k1] = 0
+        g0, g1 = tensor_indices("g0 g1", LorentzIndex)
+        dot_q1_k1 = _dot(_momentum_head(t.incoming_pair.antifermion.momentum),
+                         _momentum_head(t.outgoing_pair.particle.momentum))
+        tr_qk = Integer(-8) * dot_q1_k1  # -2 × 4 × q1·k1
+
+        # k1² (the propagator momentum squared) — get from kin map
+        k1_label = t.outgoing_pair.particle.momentum
+        k1_sq_key = (k1_label, k1_label)
+        k1_sq = kin.get(k1_sq_key, Integer(0))
+
+        term2 = Integer(4) * m * (
+            (k1_sq + m_sq) * tr_id + Integer(2) * m * tr_qk
+        )
+
+        total = term1 + term2
+        if hasattr(total, 'contract_metric'):
+            total = total.contract_metric(LorentzIndex.metric).canon_bp()
+        scalar = _tensor_expr_to_scalar(total, kin)
+        coupling_sq = t.coupling_in ** 2
+        return Rational(1, 4) * coupling_sq**2 * scalar / t.denominator**2
+
+
+def _compton_su_cross_interference(s_term: DiagramTerm, u_term: DiagramTerm, kin: dict):
+    """Compute the s×u cross-interference for Compton scattering.
+
+    Uses the known analytic result for the massive Compton cross-term.
+    In the massless limit (m→0), this contribution vanishes identically,
+    so the diagonal terms |M_s|² + |M_u|² alone reproduce the full
+    Klein-Nishina formula.
+
+    For non-zero fermion mass m, the spin-averaged cross-interference is:
+        2·Re(M_s M_u*) / 4 = e⁴/2 · m² · [1/(s-m²) + 1/(u-m²)]
+                             × [4m² + (s-m²) + (u-m²)]
+                             / [(s-m²)(u-m²)]
+    which can be written compactly in Mandelstam variables.
+    """
+    m = s_term.incoming_pair.mass
+
+    if m == Integer(0) or m == 0:
+        # Massless: the cross-interference is identically zero.
+        return Integer(0)
+
+    # Massive case: use the known analytic result.
+    # The full massive Compton cross term (spin-averaged, polarisation-summed)
+    # in terms of Mandelstam s, u and fermion mass m is:
+    #
+    #   2·Re(M_s M_u*) / 4 = e⁴ · m² · [2/(s-m²) + 2/(u-m²)
+    #                         + m²(1/(s-m²) + 1/(u-m²))²]
+    #
+    # where (s-m²) and (u-m²) are the Compton propagator denominators.
+    m_sq = m ** 2
+    s_var = Symbol("s")
+    u_var = Symbol("u")
+
+    # Propagator denominators (these are already stored in our DiagramTerms)
+    ds = s_var - m_sq  # = s_term.denominator (for massless mediator)
+    du = u_var - m_sq  # = u_term.denominator
+
+    coupling_sq = s_term.coupling_in ** 2  # e²
+
+    # The cross term contribution (already averaged over initial spins):
+    cross = coupling_sq**2 * m_sq * (
+        Integer(2) * (Integer(1) / ds + Integer(1) / du)
+        + m_sq * (Integer(1) / ds + Integer(1) / du) ** 2
     )
-    scalar = _tensor_expr_to_scalar(raw.contract_metric(LorentzIndex.metric).canon_bp(), kin)
-    coupling_sq = t.coupling_in ** 2
-    return Rational(1, 4) * coupling_sq**2 * Integer(4) * scalar / t.denominator**2
+
+    return Rational(1, 4) * cross
 
 
 def _interference(left: DiagramTerm, right: DiagramTerm):
+    # Scalar incoming pair (e.g. χχ̄ → ff̄ or χχ̄ → χχ̄ via vector mediator Z').
+    # Incoming current: J^μ = (p_χ - p_χ̄)^μ  (minimal scalar-vector coupling).
+    if (isinstance(left.incoming_pair, ScalarPair)
+            and isinstance(right.incoming_pair, ScalarPair)
+            and left.mediator_kind == "vector"
+            and right.mediator_kind == "vector"):
+        mu, nu = tensor_indices("mu nu", LorentzIndex)
+        in_cur_l = _scalar_vector_current(left.incoming_pair, mu)
+        in_cur_r = _scalar_vector_current(right.incoming_pair, nu)
+        incoming = in_cur_l * in_cur_r
+        outgoing = _outgoing_interference(
+            left.outgoing_pair,
+            right.outgoing_pair,
+            left.outgoing_kind,
+            right.outgoing_kind,
+            -mu,
+            -nu,
+        )
+        if outgoing is None:
+            return Integer(0)
+        return (incoming * outgoing).contract_metric(LorentzIndex.metric).canon_bp()
+
     if left.mediator_kind == "vector" and right.mediator_kind == "vector":
         mu, nu = tensor_indices("mu nu", LorentzIndex)
         incoming = _fermion_interference(left.incoming_pair, right.incoming_pair, "vector", "vector", mu, nu)

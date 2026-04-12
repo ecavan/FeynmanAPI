@@ -56,6 +56,7 @@ class AmplitudeResponse(BaseModel):
     description: str
     msq_latex: str          # LaTeX string for spin-averaged |M|²
     msq_sympy: str          # sympy str() form
+    integral_latex: Optional[str] = None # unintegrated formula or loop integrals
     notes: str
     backend: Optional[str] = None
     supported: bool

@@ -27,6 +27,8 @@ _LUALATEX_SEARCH = [
     "/usr/local/texlive/2025/bin/universal-darwin/lualatex",
     "/usr/local/texlive/2024/bin/universal-darwin/lualatex",
     "/Library/TeX/texbin/lualatex",
+    "/opt/homebrew/bin/lualatex",
+    "/usr/local/bin/lualatex",
     "lualatex",   # system PATH fallback
 ]
 
@@ -40,8 +42,12 @@ class MissingDependencyError(RenderError):
 
 
 def _find_tool(name: str, extra_paths: list[str] | None = None) -> str:
-    """Locate an executable, checking extra paths before PATH."""
-    search = extra_paths or []
+    """Locate an executable, checking extra paths before common locations and PATH."""
+    search = (extra_paths or []) + [
+        f"/opt/homebrew/bin/{name}",
+        f"/usr/local/bin/{name}",
+        f"/Library/TeX/texbin/{name}",
+    ]
     for candidate in search:
         if Path(candidate).is_file() and Path(candidate).stat().st_mode & 0o111:
             return candidate

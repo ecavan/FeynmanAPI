@@ -1,7 +1,7 @@
 # Loop amplitude integration via LoopTools / Package-X
 
 This document describes the plan for computing 1-loop amplitudes by bridging to the
-Fortran LoopTools library (or the Mathematica Package-X) from Python.
+Fortran LoopTools library from Python.
 
 ---
 
@@ -107,22 +107,6 @@ LoopTools bridge for the scalar integrals only.
 
 ---
 
-## Alternative: Package-X via Mathematica
-
-`feynman_engine/physics/mathematica_bridge.py` already has a stub for this.  If a
-Mathematica licence is available:
-
-```python
-from feynman_engine.physics.mathematica_bridge import compute_amplitude_feyncalc
-result = compute_amplitude_feyncalc(diagram)   # calls wolframclient
-```
-
-Package-X (Patel, 2015) provides analytic results for all 1-loop scalar integrals as
-hypergeometric functions of the kinematics, with full UV/IR divergence separation in
-dimensional regularisation.  This is faster to implement than the LoopTools bridge but
-requires Mathematica + Package-X installed.
-
----
 
 ## Timeline estimate
 

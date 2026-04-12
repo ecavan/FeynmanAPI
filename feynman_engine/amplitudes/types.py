@@ -18,6 +18,7 @@ class AmplitudeResult:
     msq: object
     msq_latex: str
     description: str
+    integral_latex: str | None = None
     notes: str = ""
     backend: str = "unknown"
 

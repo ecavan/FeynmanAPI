@@ -19,6 +19,8 @@ from feynman_engine.engine import FeynmanEngine
 from feynman_engine.physics.registry import TheoryRegistry
 from feynman_engine.physics.amplitude import get_amplitude, list_supported_processes
 
+from feynman_engine.amplitudes import get_loop_integral_latex, get_tree_integral_latex
+
 router = APIRouter(prefix="/api")
 _engine = FeynmanEngine()
 
@@ -171,24 +173,57 @@ def get_amplitude_endpoint(
     theory:  str = Query(default="QED"),
 ):
     result = get_amplitude(process.strip(), theory.upper())
-    if result is None:
-        # Return what processes are supported
+    if result is not None:
+        return AmplitudeResponse(
+            process=result.process,
+            theory=result.theory,
+            description=result.description,
+            msq_latex=result.msq_latex,
+            msq_sympy=str(result.msq),
+            integral_latex=getattr(result, "integral_latex", None),
+            notes=result.notes,
+            backend=getattr(result, "backend", None),
+            supported=True,
+        )
+
+    # Full |M|² not computable (e.g. 1→2 decay, unsupported topology).
+    # Fall back to showing just the tree-level integral representation.
+    integral = get_tree_integral_latex(process.strip(), theory.upper())
+    if integral is None:
         supported = [p["process"] for p in list_supported_processes()]
         raise HTTPException(
             status_code=404,
-            detail=f"No pre-computed amplitude for '{process}' in {theory}. "
-                   f"Supported: {supported}",
+            detail=f"No amplitude available for '{process}' in {theory}. "
+                   f"Processes with full |M|²: {supported}",
         )
     return AmplitudeResponse(
-        process=result.process,
-        theory=result.theory,
-        description=result.description,
-        msq_latex=result.msq_latex,
-        msq_sympy=str(result.msq),
-        notes=result.notes,
-        backend=getattr(result, "backend", None),
-        supported=True,
+        process=process.strip(),
+        theory=theory.upper(),
+        description="Tree-level Feynman amplitude",
+        msq_latex="",
+        msq_sympy="",
+        integral_latex=integral,
+        notes="Spin-averaged |M|² not yet computed for this process topology.",
+        backend="qgraf-integral-only",
+        supported=False,
     )
+
+
+@router.get("/amplitude/loop-integral",
+            summary="Get LaTeX for the loop-level integral of a process")
+def get_loop_integral_endpoint(
+    process: str = Query(..., description="e.g. 'e+ e- -> mu+ mu-'"),
+    theory:  str = Query(default="QED"),
+    loops:   int = Query(default=1, ge=1, le=2),
+):
+    """Return a LaTeX string showing the unevaluated loop integral."""
+    result = get_loop_integral_latex(process.strip(), theory.upper(), loops=loops)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not generate loop integral for '{process}' in {theory} at {loops}-loop.",
+        )
+    return {"process": process, "theory": theory, "loops": loops, "integral_latex": result}
 
 
 @router.get("/amplitude/processes", summary="List processes with pre-computed amplitudes")
