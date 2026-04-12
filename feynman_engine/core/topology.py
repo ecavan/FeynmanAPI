@@ -82,7 +82,18 @@ def classify_topology(diagram: Diagram) -> str:
             if (in0 > 0 and out0 == 0) or (in1 > 0 and out1 == 0):
                 return "s-channel"
 
-            # t-channel: each vertex has mixed in+out external legs (scattering)
+            # t vs u: check which outgoing particle shares a vertex with the
+            # FIRST incoming particle.  If it is the first outgoing (q1 → t)
+            # or the second outgoing (q2 → u).
+            ext_in = [e for e in diagram.external_edges
+                      if e.start_vertex < 0 and e.end_vertex >= 0]
+            ext_out = [e for e in diagram.external_edges
+                       if e.end_vertex < 0 and e.start_vertex >= 0]
+            if ext_in and len(ext_out) >= 2:
+                first_in_vid = ext_in[0].end_vertex
+                for i, out_e in enumerate(ext_out):
+                    if out_e.start_vertex == first_in_vid:
+                        return "u-channel" if i > 0 else "t-channel"
             return "t-channel"
 
         if n_internal == 2:

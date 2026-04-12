@@ -57,14 +57,19 @@ class AmplitudeResponse(BaseModel):
     msq_latex: str          # LaTeX string for spin-averaged |M|²
     msq_sympy: str          # sympy str() form
     notes: str
+    backend: Optional[str] = None
     supported: bool
 
 
 class ParticleResponse(BaseModel):
     name: str
     pdg_id: Optional[int] = None
+    pdg_name: Optional[str] = None
+    latex_name: Optional[str] = None
     particle_type: str
     mass: Optional[str] = None
+    mass_mev: Optional[float] = None
+    width_mev: Optional[float] = None
     charge: Optional[float] = None
     propagator_style: str
 

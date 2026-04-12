@@ -4,6 +4,11 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
+try:
+    from particle import Particle as PDGParticle
+except ImportError:  # pragma: no cover - optional at import time
+    PDGParticle = None
+
 
 class ParticleType(str, Enum):
     FERMION = "fermion"
@@ -34,6 +39,29 @@ class Particle(BaseModel):
     color: Optional[str] = None         # color rep: "3", "8", "1"
     propagator_style: PropagatorStyle
     antiparticle: Optional[str] = None  # name of antiparticle (None if self-conjugate)
+    pdg_name: Optional[str] = None
+    latex_name: Optional[str] = None
+    mass_mev: Optional[float] = None
+    width_mev: Optional[float] = None
+
+    def model_post_init(self, __context) -> None:
+        if self.pdg_id is None or PDGParticle is None:
+            return
+        try:
+            pdg_particle = PDGParticle.from_pdgid(self.pdg_id)
+        except Exception:
+            return
+
+        if self.charge is None:
+            self.charge = pdg_particle.charge
+        if self.pdg_name is None:
+            self.pdg_name = pdg_particle.pdg_name
+        if self.latex_name is None:
+            self.latex_name = pdg_particle.latex_name
+        if self.mass_mev is None:
+            self.mass_mev = pdg_particle.mass
+        if self.width_mev is None:
+            self.width_mev = pdg_particle.width
 
 
 class Vertex(BaseModel):

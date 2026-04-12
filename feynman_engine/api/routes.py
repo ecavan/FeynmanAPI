@@ -49,8 +49,13 @@ def list_particles(theory: str = Path(...)):
     return [
         ParticleResponse(
             name=p.name, pdg_id=p.pdg_id,
+            pdg_name=p.pdg_name,
+            latex_name=p.latex_name,
             particle_type=p.particle_type.value,
-            mass=p.mass, charge=p.charge,
+            mass=p.mass,
+            mass_mev=p.mass_mev,
+            width_mev=p.width_mev,
+            charge=p.charge,
             propagator_style=p.propagator_style.value,
         )
         for p in particles.values()
@@ -181,6 +186,7 @@ def get_amplitude_endpoint(
         msq_latex=result.msq_latex,
         msq_sympy=str(result.msq),
         notes=result.notes,
+        backend=getattr(result, "backend", None),
         supported=True,
     )
 

@@ -3,18 +3,17 @@ FROM python:3.11-slim AS qgraf-builder
 WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
     gfortran \
-    tar \
     && rm -rf /var/lib/apt/lists/*
 
-COPY qgraf-3.6.10.tgz /build/qgraf-3.6.10.tgz
+COPY qgraf-3.6.10.tgz ./
 
-RUN mkdir -p /build/src /build/out \
-    && tar -xzf /build/qgraf-3.6.10.tgz -C /build/src \
-    && gfortran -O2 -o /build/out/qgraf /build/src/qgraf-3.6.10.f08 \
-    && chmod +x /build/out/qgraf
+RUN mkdir -p src out \
+    && tar -xzf qgraf-3.6.10.tgz -C src \
+    && gfortran -O2 -o out/qgraf src/qgraf-3.6.10.f08 \
+    && chmod +x out/qgraf
 
+# ─── Production image ────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -23,26 +22,35 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System packages needed for SVG/PDF rendering.
-# QGRAF itself is not bundled here because its source is distributed separately.
+# LaTeX + SVG rendering stack.
+# texlive-science ships tikz-feynman on Debian 12 (Bookworm).
+# texlive-plain-generic provides many .sty files required by standalone.
+# texlive-fonts-recommended prevents missing font warnings that abort lualatex.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
     pdf2svg \
     texlive-luatex \
     texlive-pictures \
     texlive-latex-extra \
     texlive-science \
+    texlive-fonts-recommended \
+    texlive-plain-generic \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /app
+# Install Python deps before copying app code so this layer is cached
+# across code-only changes.
+COPY pyproject.toml README.md ./
+COPY feynman_engine/ ./feynman_engine/
+RUN pip install --upgrade pip && pip install --no-cache-dir .
 
-RUN pip install --upgrade pip && pip install .
+# Copy remaining sources (frontend, contrib, tests, etc.)
+COPY . .
 
-COPY --from=qgraf-builder /build/out/qgraf /app/bin/qgraf
+# Drop in the Linux QGRAF binary compiled in the builder stage.
+# (The bin/ directory may contain a macOS binary from development — overwrite it.)
+COPY --from=qgraf-builder /build/out/qgraf ./bin/qgraf
+RUN chmod +x ./bin/qgraf \
+    && { [ -f ./bin/qgraf_pipe ] && chmod +x ./bin/qgraf_pipe || true; }
 
-RUN chmod +x /app/bin/qgraf
-RUN if [ -f /app/bin/qgraf_pipe ]; then chmod +x /app/bin/qgraf_pipe; fi
-
-EXPOSE 10000
+EXPOSE ${PORT:-10000}
 
 CMD ["sh", "-c", "uvicorn feynman_engine.api.app:app --host 0.0.0.0 --port ${PORT:-10000}"]
