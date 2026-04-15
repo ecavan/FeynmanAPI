@@ -16,13 +16,16 @@ bin/liblooptools.so
 bin/form
 
 # Root-level LoopTools archive (bundled copy lives in feynman_engine/resources/looptools/)
-LoopTools-2.16.tar
+/LoopTools-2.16.tar
 
 # Compiled outputs
 *.pdf
 *.log
 *.aux
+
+# QGRAF output .mod files (but not our model files in contrib/qgraf/models/)
 *.mod
+!contrib/qgraf/models/*.mod
 
 # Secrets / local config
 .env
