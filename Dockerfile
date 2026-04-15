@@ -50,7 +50,7 @@ COPY feynman_engine/resources/looptools/LoopTools-2.16.tar ./
 
 RUN mkdir -p src \
     && tar -xf LoopTools-2.16.tar -C src \
-    && cd src \
+    && cd src/LoopTools-2.16 \
     && ./configure --prefix=/build/install FFLAGS="-fPIC -O2" CFLAGS="-fPIC -O2" \
     && make -j4 \
     && gfortran -shared \
