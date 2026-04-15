@@ -50,14 +50,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY feynman_engine/resources/looptools/LoopTools-2.16.tar ./
 
-RUN mkdir -p src \
+RUN set -ex \
+    && mkdir -p src \
     && tar -xf LoopTools-2.16.tar -C src \
     && cd src/LoopTools-2.16 \
-    && ./configure --prefix=/build/install FFLAGS="-fPIC -O2" CFLAGS="-fPIC -O2" \
+    && export FFLAGS="-fPIC -O2" \
+    && export CFLAGS="-fPIC -O2" \
+    && export CC=gcc \
+    && ./configure --prefix=/build/install \
     && make -j1 \
+    && ls -la build/libooptools.a \
     && gfortran -shared \
          -o /build/liblooptools.so \
-         -Wl,--whole-archive,build/libooptools.a,--no-whole-archive \
+         -Wl,--whole-archive,$(pwd)/build/libooptools.a,--no-whole-archive \
          -lgfortran -lm
 
 # ─── Production image ────────────────────────────────────────────────────────
