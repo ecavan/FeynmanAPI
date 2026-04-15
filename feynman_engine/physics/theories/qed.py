@@ -43,6 +43,26 @@ PARTICLES: dict[str, Particle] = {
         propagator_style=PropagatorStyle.ANTI_FERMION,
         antiparticle="mu-",
     ),
+    "tau-": Particle(
+        name="tau-",
+        pdg_id=15,
+        particle_type=ParticleType.FERMION,
+        mass="m_tau",
+        charge=-1.0,
+        color="1",
+        propagator_style=PropagatorStyle.FERMION,
+        antiparticle="tau+",
+    ),
+    "tau+": Particle(
+        name="tau+",
+        pdg_id=-15,
+        particle_type=ParticleType.ANTIFERMION,
+        mass="m_tau",
+        charge=+1.0,
+        color="1",
+        propagator_style=PropagatorStyle.ANTI_FERMION,
+        antiparticle="tau-",
+    ),
     "gamma": Particle(
         name="gamma",
         pdg_id=22,
@@ -60,6 +80,7 @@ PARTICLES: dict[str, Particle] = {
 VERTICES: list[tuple[str, str, str]] = [
     ("e-", "e+", "gamma"),
     ("mu-", "mu+", "gamma"),
+    ("tau-", "tau+", "gamma"),
 ]
 
 # Mapping from user-friendly names to canonical QGRAF internal names
@@ -69,6 +90,8 @@ QGRAF_NAME_MAP: dict[str, str] = {
     "e+": "ep",
     "mu-": "mum",
     "mu+": "mup",
+    "tau-": "taum",
+    "tau+": "taup",
     "gamma": "A",
 }
 

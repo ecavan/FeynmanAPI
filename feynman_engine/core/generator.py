@@ -100,6 +100,18 @@ def _qgraf_options(filters: dict | None) -> str:
     return ", ".join(opts) if opts else "notadpole"
 
 
+def _model_file_for_spec(spec: ProcessSpec) -> str:
+    """Choose the QGRAF model file based on theory and external particles."""
+    _MODEL_FILES = {
+        "QED": "qed.mod",
+        "QCD": "qcd.mod",
+        "QCDQED": "qcdqed.mod",
+        "EW":  "electroweak.mod",
+        "BSM": "bsm.mod",
+    }
+    return _MODEL_FILES.get(spec.theory, f"{spec.theory.lower()}.mod")
+
+
 def _run_qgraf_pipe(spec: ProcessSpec, filters: dict | None = None) -> str:
     """
     Run qgraf_pipe (stdin/stderr version from QGraf GitLab).
@@ -115,9 +127,8 @@ def _run_qgraf_pipe(spec: ProcessSpec, filters: dict | None = None) -> str:
     Diagram output is on stderr.
     """
     binary = _qgraf_pipe_path()
-    theory_lower = spec.theory.lower()
 
-    model_file = _QGRAF_CONTRIB_MODELS / f"{theory_lower}.mod"
+    model_file = _QGRAF_CONTRIB_MODELS / _model_file_for_spec(spec)
     style_file  = _FEYNMAN_STY
 
     if not model_file.exists():
@@ -180,13 +191,7 @@ def _run_qgraf_std(spec: ProcessSpec, filters: dict | None = None) -> str:
     """
     binary = _qgraf_std_path()
 
-    _MODEL_FILES = {
-        "QED": "qed.mod",
-        "QCD": "qcd.mod",
-        "EW":  "electroweak.mod",
-        "BSM": "bsm.mod",
-    }
-    model_filename = _MODEL_FILES.get(spec.theory, f"{spec.theory.lower()}.mod")
+    model_filename = _model_file_for_spec(spec)
     model_src = _QGRAF_CONTRIB_MODELS / model_filename
     style_src = _FEYNMAN_STY
 

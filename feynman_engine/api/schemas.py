@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class DiagramFilters(BaseModel):
-    """QGRAF-level filters applied during diagram generation."""
-    no_tadpoles: bool = Field(default=True,  description="Exclude tadpole diagrams")
-    one_pi:      bool = Field(default=False, description="1-particle-irreducible diagrams only")
-    connected:   bool = Field(default=True,  description="Connected diagrams only")
+    """Filters applied during diagram generation."""
+    no_tadpoles:      bool = Field(default=True,  description="Exclude tadpole diagrams")
+    one_pi:           bool = Field(default=False, description="1-particle-irreducible diagrams only")
+    connected:        bool = Field(default=True,  description="Connected diagrams only")
+    unique_topologies: bool = Field(default=False, description="Return only one representative diagram per topology class")
 
 
 class GenerateRequest(BaseModel):
@@ -53,6 +54,7 @@ class GenerateResponse(BaseModel):
 class AmplitudeResponse(BaseModel):
     process: str
     theory: str
+    loops: int = 0
     description: str
     msq_latex: str          # LaTeX string for spin-averaged |M|²
     msq_sympy: str          # sympy str() form
@@ -60,6 +62,21 @@ class AmplitudeResponse(BaseModel):
     notes: str
     backend: Optional[str] = None
     supported: bool
+    has_msq: bool = False
+    has_integral: bool = False
+    availability_message: Optional[str] = None
+    approximation_level: str = "exact-symbolic"
+    evaluation_point: Optional[dict] = None
+
+
+class LoopIntegralResponse(BaseModel):
+    process: str
+    theory: str
+    loops: int
+    integral_latex: Optional[str] = None
+    has_integral: bool
+    notes: str = ""
+    availability_message: Optional[str] = None
 
 
 class ParticleResponse(BaseModel):
@@ -81,6 +98,22 @@ class DescribeResponse(BaseModel):
     theory: str
     incoming: list[dict]
     outgoing: list[dict]
+
+
+class CrossSectionResponse(BaseModel):
+    process: str
+    theory: str
+    sqrt_s_gev: float
+    s_gev2: float
+    sigma_pb: float
+    sigma_uncertainty_pb: float
+    dsigma_at_cos0_pb: Optional[float] = None
+    has_tchannel_pole: bool
+    cos_theta_range: list[float]
+    eps: float
+    converged: bool
+    formula_latex: str
+    supported: bool
 
 
 class ErrorResponse(BaseModel):

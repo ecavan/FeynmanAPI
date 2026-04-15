@@ -45,3 +45,8 @@ class TestParseProcess:
         spec = parse_process("e+ e- -> mu+ mu-", theory="QED")
         assert spec.qgraf_incoming == ["ep", "em"]
         assert spec.qgraf_outgoing == ["mup", "mum"]
+
+    def test_tau_qed_processes_are_supported(self):
+        spec = parse_process("e+ e- -> tau+ tau-", theory="QED")
+        assert spec.outgoing == ["tau+", "tau-"]
+        assert spec.qgraf_outgoing == ["taup", "taum"]

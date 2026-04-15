@@ -99,6 +99,15 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
             f"(unsupported external particle types for that channel)."
         )
 
+    # QCD bail-out: the symbolic trace computation and color-factor convention
+    # don't yet produce correct SU(3) colour-averaged results (the kinematic
+    # trace carries a normalization that conflicts with the color-factor lookup,
+    # and multi-topology interference terms need topology-dependent color
+    # factors). Defer ALL QCD processes to the curated backend which has
+    # verified Combridge et al. / PYTHIA colour factors.
+    if theory == "QCD":
+        return None
+
     # Build kinematic dot-product map from the physical incoming/outgoing edges.
     kin = _universal_kinematics_context(supported[0])
 
@@ -125,6 +134,18 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
             compton_msq_total += Integer(2) * cross
 
     # Normal (vector/scalar mediator) diagrams: double sum with 1/4 spin average.
+    #
+    # Fermi antisymmetry: when the t- and u-channel diagrams are related by
+    # exchange of identical fermions (Møller, uu→uu, etc.), the relative sign
+    # between M_t and M_u is −1.  This means |M_t − M_u|² = |M_t|² + |M_u|²
+    # − 2Re(M_t*·M_u), so the t×u cross-interference enters with a minus sign.
+    _identical_fermion_exchange = (
+        len(spec.incoming) == 2
+        and len(spec.outgoing) == 2
+        and (spec.incoming[0] == spec.incoming[1]
+             or spec.outgoing[0] == spec.outgoing[1])
+    )
+
     normal_msq = Integer(0)
     for left in normal_terms:
         for right in normal_terms:
@@ -149,8 +170,12 @@ def get_symbolic_amplitude(process: str, theory: str = "QED") -> AmplitudeResult
                 cross = _tu_cross_interference(t_term, u_term)
                 if cross == 0:
                     continue
+                # Fermi sign: −1 for identical-fermion exchange (Møller, uu→uu),
+                # +1 otherwise.
+                fermi_sign = Integer(-1) if _identical_fermion_exchange else Integer(1)
                 normal_msq += (
-                    left.symmetry_factor
+                    fermi_sign
+                    * left.symmetry_factor
                     * right.symmetry_factor
                     * left.coupling_in
                     * left.coupling_out
@@ -290,7 +315,7 @@ def _propagator_latex(particle_name: str, momentum_label: str, theory: str) -> s
         mass_str = None
         ptype = None
 
-    mom = momentum_label.replace("_", r"\_") if "_" in momentum_label else momentum_label
+    mom = momentum_label
 
     if mass_str and mass_str != "0":
         mass_tex = mass_str
@@ -299,6 +324,8 @@ def _propagator_latex(particle_name: str, momentum_label: str, theory: str) -> s
         denom = f"{mom}^2 + i\\epsilon"
 
     if ptype and ptype.value == "boson":
+        if particle_name == "g":
+            return f"\\frac{{-i \\delta^{{ab}} g^{{\\mu\\nu}}}}{{{denom}}}"
         return f"\\frac{{-i g^{{\\mu\\nu}}}}{{{denom}}}"
     elif ptype and ptype.value in ("fermion", "antifermion"):
         return f"\\frac{{i(\\not{{{mom}}} + {mass_str or '0'})}}{{{denom}}}"
@@ -311,18 +338,34 @@ def _vertex_factor_latex(theory: str, vertex, diagram: "Diagram | None" = None) 
 
     Returns e.g. ``-ie\\gamma^\\mu`` for QED, ``-ig_s T^a \\gamma^\\mu`` for QCD.
     For EW Higgs-fermion vertices the Yukawa coupling -im_f/v is used.
+    For pure-gluon vertices the 3- and 4-gluon Feynman rules are shown.
     """
-    # Detect Higgs vertex: any edge connecting to this vertex is the Higgs.
-    if diagram is not None and theory == "EW":
-        vertex_particles = {
+    # Detect vertex particle content from diagram edges.
+    vertex_particles: list[str] = []
+    if diagram is not None:
+        vertex_particles = [
             e.particle
             for e in diagram.edges
             if e.start_vertex == vertex.id or e.end_vertex == vertex.id
-        }
-        if "H" in vertex_particles:
+        ]
+
+    if diagram is not None and theory == "EW":
+        particle_set = set(vertex_particles)
+        if "H" in particle_set:
             return r"-i\frac{m_f}{v}"
-        if "W+" in vertex_particles or "W-" in vertex_particles:
+        if "W+" in particle_set or "W-" in particle_set:
             return r"-i\frac{g}{\sqrt{2}}\gamma^{\mu}\frac{1-\gamma^5}{2}"
+
+    if theory == "QCD" and vertex_particles:
+        n_gluons = sum(1 for p in vertex_particles if p == "g")
+        n_legs = len(vertex_particles)
+        if n_gluons == 3 and n_legs == 3:
+            return r"g_s f^{abc}\left[g^{\mu\nu}(k_1-k_2)^\rho + \text{cyclic}\right]"
+        if n_gluons == 4 and n_legs == 4:
+            return r"-ig_s^2\left[f^{abe}f^{cde}(g^{\mu\rho}g^{\nu\sigma}-g^{\mu\sigma}g^{\nu\rho}) + \text{perms}\right]"
+        if n_gluons >= 1:
+            return r"-ig_s T^a \gamma^{\mu}"
+
     if theory == "QED":
         return r"-ie\gamma^{\mu}"
     elif theory == "QCD":
@@ -363,17 +406,17 @@ def _build_tree_integral_latex(diagrams: list[Diagram], theory: str) -> str:
         int_mom[edge.id] = edge.momentum or f"l_{{{idx + 1}}}"
     edge_labels = {**ext_mom, **int_mom}
 
-    # ── Integration measure (over internal momenta) ───
-    if internals:
-        measure_parts = [
-            f"\\int \\frac{{d^4 {int_mom[e.id]}}}{{(2\\pi)^4}}"
-            for e in internals
-        ]
-        measure_str = " ".join(measure_parts)
-    else:
-        measure_str = ""
+    # ── Integration measure ─────────────────────────
+    # Tree-level diagrams have no loop momenta; delta functions fix all
+    # internal momenta in terms of external ones.  Only show the measure
+    # for genuine loop integrals (shouldn't happen here, but be safe).
+    measure_str = ""
 
     # ── External spinor / polarisation factors ────
+    # Each external boson gets a distinct Lorentz index (μ, ν, ρ, σ, …).
+    _lorentz_indices = [r"\mu", r"\nu", r"\rho", r"\sigma", r"\lambda", r"\kappa"]
+    _boson_idx = 0
+
     ext_parts = []
     for edge in externals:
         p = None
@@ -395,10 +438,12 @@ def _build_tree_integral_latex(diagrams: list[Diagram], theory: str) -> str:
             else:                            # incoming antifermion
                 ext_parts.append(f"\\bar{{v}}({mom})")
         elif p.particle_type.value == "boson":
+            idx = _lorentz_indices[_boson_idx % len(_lorentz_indices)]
+            _boson_idx += 1
             if edge.end_vertex < 0:
-                ext_parts.append(f"\\epsilon^{{*\\mu}}({mom})")
+                ext_parts.append(f"\\epsilon^{{*{idx}}}({mom})")
             else:
-                ext_parts.append(f"\\epsilon^{{\\mu}}({mom})")
+                ext_parts.append(f"\\epsilon^{{{idx}}}({mom})")
         else:
             # Scalar external particle: no spinor/polarization factor (= 1)
             pass

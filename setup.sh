@@ -44,7 +44,40 @@ else
   fi
 fi
 
-# 4. Verify Python packages
+# 4. LoopTools
+echo ""
+echo "--- LoopTools ---"
+LT_LIB=$(ls bin/liblooptools.dylib bin/liblooptools.so 2>/dev/null | head -1)
+if [ -n "$LT_LIB" ]; then
+  echo "✓ LoopTools library found at $LT_LIB"
+else
+  echo "LoopTools library not found. Attempting to build from bundled source archive..."
+  if python -m feynman_engine install-looptools; then
+    echo "✓ Built LoopTools from bundled source archive"
+  else
+    echo "⚠ Unable to build LoopTools automatically."
+    echo "  Loop-level numerical evaluation will be unavailable."
+    echo "  Ensure gfortran and make are installed."
+  fi
+fi
+
+# 5. FORM
+echo ""
+echo "--- FORM ---"
+if [ -f bin/form ]; then
+  echo "✓ FORM binary found at bin/form"
+else
+  echo "FORM binary not found. Attempting to build from bundled source archive..."
+  if python -m feynman_engine install-form; then
+    echo "✓ Built FORM from bundled source archive"
+  else
+    echo "⚠ Unable to build FORM automatically."
+    echo "  FORM-based trace computation will be unavailable (SymPy fallback will be used)."
+    echo "  Ensure a C compiler (cc/gcc/clang) and make are installed."
+  fi
+fi
+
+# 6. Verify Python packages
 echo ""
 echo "--- Python packages ---"
 python -c "import networkx; print('✓ networkx', networkx.__version__)"

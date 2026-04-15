@@ -1,44 +1,177 @@
 # FeynmanEngine
 
-A Feynman diagram generator and tree-level amplitude calculator for particle physics. Give it a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams as SVG/TikZ plus the symbolic spin-averaged |M|² expression.
+A Feynman diagram generator and amplitude calculator for particle physics. Give it a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams as SVG/TikZ, the symbolic spin-averaged |M|^2, integrated cross-sections, and --- for standard processes --- numerically evaluated 1-loop results via LoopTools.
 
 **Built on proven HEP tooling:**
-- [QGRAF](http://cfif.ist.utl.pt/~paulo/qgraf.html) — the industry-standard Feynman diagram enumerator used in professional NLO/NNLO calculations worldwide
-- [SymPy](https://www.sympy.org/) — symbolic algebra including `GammaMatrix` for exact Dirac trace computation
-- [TikZ-Feynman](https://ctan.org/pkg/tikz-feynman) — the standard LaTeX package for publication-quality Feynman diagrams
-- [FastAPI](https://fastapi.tiangolo.com/) — modern async Python web framework
-- [NetworkX](https://networkx.org/) — graph library used for topology classification
+- [QGRAF](http://cfif.ist.utl.pt/~paulo/qgraf.html) --- the industry-standard Feynman diagram enumerator used in professional NLO/NNLO calculations worldwide
+- [FORM](https://www.nikhef.nl/~form/) --- the standard symbolic algebra engine for high-energy physics trace calculations
+- [LoopTools](https://www.feynarts.de/looptools/) --- the standard one-loop scalar/tensor integral library by Hahn & Perez-Victoria
+- [SymPy](https://www.sympy.org/) --- symbolic algebra including `GammaMatrix` for exact Dirac trace computation
+- [TikZ-Feynman](https://ctan.org/pkg/tikz-feynman) --- the standard LaTeX package for publication-quality Feynman diagrams
+- [FastAPI](https://fastapi.tiangolo.com/) --- modern async Python web framework
+- [SciPy](https://scipy.org/) --- numerical integration for cross-section calculations
 
 ---
 
 ## What it does
 
-- Enumerates Feynman diagrams for any process in QED, QCD, electroweak, or BSM theories using QGRAF
+### Diagram generation and rendering
+- Enumerates Feynman diagrams for any process in QED, QCD, QCD+QED (mixed), electroweak, or BSM theories using QGRAF
 - Classifies diagram topologies: s-channel, t-channel, u-channel, triangle, box, self-energy, etc.
 - Renders publication-quality SVG diagrams via TikZ-Feynman and LuaLaTeX
-- Computes symbolic spin-averaged |M|² at tree level using exact Dirac traces via SymPy
-- Serves a REST API and browser UI from a single FastAPI app
-- Supports loop diagram generation (topology classification only; loop integrals are not computed)
 
-### Amplitude coverage
+### Tree-level amplitudes
+- Computes symbolic spin-averaged |M|^2 at tree level via three backends:
+  1. **FORM symbolic traces** --- handles QCD color algebra (SU(3) structure constants, physical polarization sums for external gluons, 3-gluon + 4-gluon contact vertices)
+  2. **SymPy Dirac traces** --- exact gamma-matrix traces for QED/EW/BSM
+  3. **Curated formulas** --- 54 verified results from Combridge, Peskin/Schroeder, Ellis/Stirling/Webber, Schwartz, Grozin, Gunion/Haber/Kane/Dawson
+- All QCD 2->2 cross-sections verified against PYTHIA8/Combridge et al. (1977) --- ratio 1.0000 at all kinematic points
 
-| Process type | Example | Status |
+### QCD with full color algebra
+- SU(3) color factor matrices for all 2->2 QCD channels (qq->gg, qg->qg, gg->gg, qq->qq)
+- Kleiss-Stirling physical polarization sums for external gluons --- avoids gauge artifacts from unphysical longitudinal modes
+- gg->gg computed via 3-gluon vertex exchange (s, t, u channels) + 4-gluon contact vertex decomposed into color-ordered amplitudes
+- Color factors verified numerically via explicit Gell-Mann matrix traces
+
+### Full Feynman integral expressions
+- Every tree-level and 1-loop result includes the textbook Feynman integral: external spinors/polarizations, vertex factors, propagators, and momentum-conservation delta functions
+- QCD vertices show proper Feynman rules: 3-gluon `g_s f^{abc}[g^{mu nu}(k1-k2)^rho + cyclic]`, 4-gluon contact, and quark-gluon `-ig_s T^a gamma^mu`
+- Gluon propagators show color delta: `-i delta^{ab} g^{mu nu} / k^2`
+- Each external boson gets a distinct Lorentz index (mu, nu, rho, sigma, ...)
+
+### Cross-sections
+- 2->2 differential and total cross-sections with full massive kinematics (Kallen function, threshold detection) via SciPy adaptive quadrature
+- 2->N flat Monte Carlo integration via RAMBO phase-space algorithm (Kleiss, Stirling, Ellis 1986)
+- **Vegas adaptive MC** for 2->N processes with sharp kinematic features (t-channel poles, resonances) --- importance sampling learns where |M|^2 is largest and concentrates samples there, converging much faster than flat RAMBO for peaked integrands
+- Validated: sigma(e+e- -> mu+mu-) at sqrt(s)=10 GeV matches the analytic 4*pi*alpha^2/(3s) ~ 865 pb to <1% across all three integration methods (scipy.quad, RAMBO, Vegas)
+
+### 1-loop infrastructure
+- Full Passarino-Veltman tensor integral basis through 4-point rank-2 (A0 through D33)
+- **Symbolic PV decomposition**: every 1-loop diagram is expressed as a linear combination of PV scalar integrals with fully symbolic coefficients in (s, t, u, masses, couplings) --- not just numbers
+- **Analytic closed-form PV integrals** (no LoopTools required): A₀, B₀ (all 6 special cases + general), B₁, B₀₀, C₀ (Li₂ closed form for one-mass triangle, Feynman parameter dblquad for general spacelike), D₀ (massless box). Pure Python/SymPy/mpmath --- works without any external Fortran library
+- Automatic PV tensor reduction via FORM
+- LoopTools bridge (ctypes) for numerical evaluation of scalar and tensor integrals
+- Individual PV integral values displayed alongside the symbolic formula when LoopTools is available
+- 20 curated 1-loop results: self-energies, vertex corrections, VP corrections, box diagrams, ghost sector, running couplings, and Higgs loop-induced decays
+- MS-bar running couplings: alpha(mu^2) and alpha_s(mu^2)
+
+### API and frontend
+- REST API and browser UI from a single FastAPI app
+- Swagger documentation at `/docs`
+
+---
+
+## Amplitude coverage
+
+### Tree level
+
+| Process type | Examples | Backend | Status |
+|---|---|---|---|
+| QED 2->2 | e+e- -> mu+mu-, Bhabha, Moller, Compton | SymPy / curated | exact |
+| QED 2->3 bremsstrahlung | e+e- -> mu+mu- gamma (5 diagrams) | FORM | exact |
+| QCD qq <-> gg | u u~ -> g g, g g -> u u~ | FORM + SU(3) color | exact |
+| QCD qg -> qg | u g -> u g (all flavors) | FORM + SU(3) color | exact |
+| QCD gg -> gg | g g -> g g (3-gluon + 4-gluon contact) | FORM + SU(3) color | exact |
+| QCD qq -> qq | u d -> u d, u u -> u u | curated | exact |
+| QCD+QED mixed | qq -> gamma gamma, qq -> gamma g, qg -> q gamma | curated | exact |
+| EW multi-mediator | e+e- -> mu+mu- (gamma + Z + H) | SymPy | exact |
+| EW Higgsstrahlung | e+e- -> ZH, tau+tau- -> ZH | curated | exact |
+| EW pair production | e+e- -> W+W-, e+e- -> ZZ | curated | exact |
+| EW Drell-Yan | qq -> l+l-, ud -> e nu | curated | exact |
+| EW decays | Z -> ff, W -> lnu, W -> qq, H -> ff, H -> WW/ZZ, t -> bW | curated | exact |
+| EW other | muon decay (mu -> e nu nu), e nu -> mu nu | curated | exact |
+| BSM dark matter | e+e- -> chi chi~ via Z' | SymPy | exact |
+
+54 curated tree-level amplitudes covering QED, QCD, electroweak, and mixed QCD+QED processes.
+
+### 1-loop (curated, via LoopTools)
+
+20 curated 1-loop results expressed in terms of Passarino-Veltman scalar integrals:
+
+| Category | Observable | Expression | Reference |
+|---|---|---|---|
+| **QED self-energies** | Photon self-energy | Sigma_T = (alpha/pi)[2A0 - (4m^2 - k^2)B0] | Denner 1993 eq. C.2 |
+| | Electron self-energy | Sigma = (alpha/4pi)[2A0 + (2m^2 - p^2)B0] | P&S eq. 7.27 |
+| | Running alpha(q^2) | alpha/(1 - Pi_hat(q^2)) | |
+| **QED vertex** | Vertex form factor | delta_F1 = (alpha/2pi)[-B0 + (4m^2 - q^2/2)/q^2 * C0] | Denner 1993 |
+| | Schwinger AMM | a_e = alpha/(2pi) ~ 1.1614e-3 | analytic |
+| **QED 2->2 VP** | e+e- -> mu+mu- VP | delta\|M\|^2 = \|M\|^2_tree * (-2Pi/s) | P&S Ch.7 |
+| | Compton VP | s- and u-channel propagator corrections | |
+| | Bhabha VP | s- and t-channel propagator corrections | Actis et al. EPJC 66 |
+| | Moller VP | t- and u-channel propagator corrections | |
+| **QED box** | e+e- -> mu+mu- box | c_D0 = -8*alpha^2*t*u | correct Dirac trace |
+| **QCD self-energies** | Quark self-energy | Sigma_q = (alpha_s C_F/4pi)[A0 + (p^2+m^2)B0] | Muta 1998 |
+| | Gluon self-energy | beta_0 contribution via B0(k^2;0,0) | |
+| | Ghost self-energy | Sigma_ghost = (alpha_s C_A/16pi) p^2 B0 | Pascual & Tarrach |
+| | Running alpha_s(q^2) | alpha_s/(1 + alpha_s*beta_0/(4pi)*B0) | Gross & Wilczek 1973 |
+| **QCD vertex** | Quark-gluon vertex | delta_V1 = (alpha_s C_F/2pi)[-B0 + ...C0] | |
+| | Ghost-gluon vertex | Z_tilde_1 = 1 in Landau gauge (Taylor) | Taylor NPB 33 (1971) |
+| | qq -> gg VP | gluon propagator correction at scale s | ESW Ch.7 |
+| **Higgs decays** | H -> gg (top loop) | \|M\|^2 = alpha_s^2 m_H^4/(8pi^2 v^2) | Spira et al. NPB 453 |
+| | H -> gamma gamma (W+top) | \|M\|^2 propto \|-7 + 16/9\|^2 | Djouadi Phys.Rep. 457 |
+| | H -> Z gamma (W+top) | phase-space * form factor | Bergstrom & Hulth 1985 |
+
+Scalar forms verified numerically: at k^2=4 GeV^2, m^2=1 GeV^2, LoopTools gives Sigma_T = 2.000 matching Denner exactly.
+
+### UV renormalization (MS-bar)
+
+- delta_Z3 (photon field strength counterterm)
+- delta_m_e, delta_m_q (mass counterterms)
+- delta_Z3^g (gluon field strength counterterm)
+- Running couplings: alpha(mu^2) and alpha_s(mu^2)
+- Renormalized observables: photon self-energy, vertex form factor
+
+### Tensor integral infrastructure
+
+The full Passarino-Veltman tensor integral basis is implemented and available via the LoopTools bridge:
+
+| Rank | Integrals |
+|---|---|
+| 1-point | A0 |
+| 2-point scalar | B0 |
+| 2-point tensor | B1, B00, B11 |
+| 3-point scalar | C0 |
+| 3-point tensor | C1, C2, C00, C11, C12, C22 |
+| 4-point scalar | D0 |
+| 4-point tensor (rank-1) | D1, D2, D3 |
+| 4-point tensor (rank-2) | D00, D11, D12, D13, D22, D23, D33 |
+
+Each integral has a frozen dataclass with `latex()` and `evaluate()` methods, importable from `feynman_engine.amplitudes`. The `evaluate()` method uses the analytic closed-form formulas (no LoopTools required). Automatic PV tensor reduction via FORM is also available for reducing arbitrary 1-loop integrals to the scalar basis.
+
+### Analytic closed-form scalar integrals
+
+All standard 1-loop PV scalar integrals are available as pure-Python analytic functions via `feynman_engine.amplitudes.analytic_integrals`. No LoopTools or Fortran compiler required.
+
+| Integral | Arguments | Method | Coverage |
+|---|---|---|---|
+| A₀(m²) | tadpole | Exact formula | All masses |
+| B₀(p²; m₁², m₂²) | bubble | 6 special-case formulas + Feynman parameter quad | All kinematics |
+| B₁(p²; m₁², m₂²) | tensor bubble | PV reduction → A₀ + B₀ | All kinematics (p²≠0) |
+| B₀₀(p²; m₁², m₂²) | tensor bubble | PV reduction → A₀ + B₀ + B₁ | All kinematics (p²≠0) |
+| C₀(p₁²,p₂²,p₁₂²; m₁²,m₂²,m₃²) | triangle | Li₂ closed form (one-mass), dblquad (general spacelike) | Spacelike + one-mass timelike |
+| D₀(pᵢ²,s,t; mᵢ²) | box | Massless box formula | Fully massless only |
+
+All numeric results validated against LoopTools to relative tolerance < 10⁻⁸. Both symbolic mode (SymPy expressions with `Delta_UV`, `log`, `polylog`) and numeric mode (complex numbers with `Delta_UV=0`) are supported.
+
+References: 't Hooft & Veltman (1979), Denner (1993), Ellis & Zanderighi (2008), Passarino & Veltman (1979).
+
+---
+
+## Supported theories
+
+| Theory | Particles | Example processes |
 |---|---|---|
-| s-channel annihilation | e⁺e⁻ → μ⁺μ⁻ | exact |
-| s-channel multi-mediator | e⁺e⁻ → μ⁺μ⁻ (EW: γ+Z+H) | exact |
-| t-channel single diagram | e⁻μ⁻ → e⁻μ⁻ | exact |
-| t+u channel (Møller, QCD qq→qq) | e⁻e⁻ → e⁻e⁻ | diagonal terms only* |
-| s+t channel (Bhabha) | e⁺e⁻ → e⁺e⁻ | diagonal terms only* |
-| BSM dark matter | e⁺e⁻ → χχ̄ via Z' | exact |
-| Loop amplitudes | — | not computed |
-
-\* Cross-topology interference requires non-factorizable 8-gamma traces; individual diagram contributions are exact.
+| `QED` | e, mu, tau, gamma | e+e- -> mu+mu-, Bhabha, Moller, Compton, bremsstrahlung |
+| `QCD` | u, d, s, c, b, t, g (+ ghosts) | u u~ -> g g, g g -> g g, u g -> u g, multi-jet |
+| `QCDQED` | u, d, s, c, b, t, g, gamma | u u~ -> gamma g, u g -> u gamma, gamma g -> u u~ |
+| `EW` | all SM fermions, gamma, Z, W+/-, H | e+e- -> W+W-, Z/W/H decays, t -> b W+, Drell-Yan |
+| `BSM` | chi (dark matter), Z' | e+e- -> chi chi~ via Z' |
 
 ---
 
 ## Local setup
 
-**Requirements:** Python 3.11+, gfortran (to compile QGRAF), LuaLaTeX + pdf2svg (for SVG rendering)
+**Requirements:** Python 3.11+, C compiler (for FORM), gfortran (for QGRAF and LoopTools), LuaLaTeX + pdf2svg (optional, for SVG rendering)
 
 ```bash
 git clone https://github.com/ecavan/FeynmanAPI.git
@@ -50,6 +183,12 @@ pip install -e ".[dev]"
 
 # Build the QGRAF binary from the bundled source archive
 feynman install-qgraf
+
+# Build FORM for symbolic trace computation (QCD color algebra, 2->3 processes)
+feynman install-form
+
+# (Optional) Build LoopTools for numerical 1-loop evaluation
+feynman install-looptools
 ```
 
 ### Install rendering tools (for SVG output)
@@ -76,37 +215,54 @@ uvicorn feynman_engine.api.app:app --reload
 
 Open **http://localhost:8000** for the browser UI, or **http://localhost:8000/docs** for the API explorer.
 
-### Quick API example
+### Quick API examples
 
 ```bash
+# Tree-level amplitude
 curl -X POST http://localhost:8000/api/generate \
   -H "Content-Type: application/json" \
   -d '{"process": "e+ e- -> mu+ mu-", "theory": "QED", "loops": 0}'
+
+# Cross-section at sqrt(s) = 10 GeV
+curl "http://localhost:8000/api/amplitude/cross-section?process=e%2B+e-+-%3E+mu%2B+mu-&theory=QED&sqrt_s=10.0"
+
+# QCD cross-section
+curl "http://localhost:8000/api/amplitude/cross-section?process=g+g+-%3E+g+g&theory=QCD&sqrt_s=100.0"
+
+# Vegas adaptive MC for 2->3 process (converges faster for peaked integrands)
+curl "http://localhost:8000/api/amplitude/cross-section?process=e%2B+e-+-%3E+mu%2B+mu-+gamma&theory=QED&sqrt_s=10.0&method=vegas&min_invariant_mass=1.0"
+
+# 1-loop PV decomposition (symbolic coefficients + individual integrals)
+curl "http://localhost:8000/api/amplitude/loop-pv?process=e%2B+e-+-%3E+mu%2B+mu-&theory=QED"
+
+# 1-loop observable with numerical PV integral values (requires LoopTools)
+curl "http://localhost:8000/api/amplitude/loop-evaluate?observable=photon_selfenergy&q_sq=4.0&m_sq=1.0"
+
+# Analytic PV integral evaluation (NO LoopTools required)
+curl "http://localhost:8000/api/amplitude/loop-analytic?integral_type=B0&p_sq=4.0&m1_sq=1.0&m2_sq=1.0"
+
+# Running coupling
+curl "http://localhost:8000/api/amplitude/running-coupling?coupling=alpha&q_sq=100.0"
 ```
 
 ---
 
-## Supported theories
+## API reference (selected endpoints)
 
-| Theory | Example processes |
-|---|---|
-| `QED` | e⁺e⁻→μ⁺μ⁻, e⁻μ⁻→e⁻μ⁻, e⁻e⁻→e⁻e⁻, Compton |
-| `QCD` | uū→gg, ud→ud, uu→uu, 1-loop corrections |
-| `EW` | e⁺e⁻→μ⁺μ⁻ (γ+Z+H), e⁺e⁻→τ⁺τ⁻, W/Z decay |
-| `BSM` | e⁺e⁻→χχ̄ via Z' (add custom UFO models) |
-
----
-
-## Deploy on Render.com
-
-This project ships a `Dockerfile` that:
-1. Compiles a Linux QGRAF binary from the bundled source archive
-2. Installs Python, LuaLaTeX, TikZ-Feynman, and pdf2svg
-
-Create a **Web Service** on [render.com](https://render.com) with:
-- Runtime: `Docker`
-- Health check: `/api/status`
-- Start command auto-detected from the Dockerfile
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/generate` | Enumerate diagrams + amplitude for any process |
+| GET | `/api/amplitude/cross-section` | sigma for 2->2 (quad) and 2->N (RAMBO or Vegas) |
+| GET | `/api/amplitude/loop-pv` | Symbolic PV decomposition with individual term coefficients |
+| GET | `/api/amplitude/loop-evaluate` | Numerically evaluate 1-loop observable via LoopTools |
+| GET | `/api/amplitude/loop-analytic` | Evaluate PV scalar integral analytically (no LoopTools required) |
+| GET | `/api/amplitude/loop-curated` | List all 10 curated 1-loop results |
+| GET | `/api/amplitude/running-coupling` | alpha(mu^2) or alpha_s(mu^2) at given scale |
+| GET | `/api/amplitude/renorm-status` | UV counterterms and their values |
+| GET | `/api/amplitude/renorm-selfenergy` | Renormalized photon self-energy |
+| GET | `/api/theories` | List available theories |
+| GET | `/api/theories/{theory}/particles` | Particle registry for a theory |
+| GET | `/api/status` | Backend and dependency status |
 
 ---
 
@@ -117,4 +273,68 @@ source .venv/bin/activate
 pytest
 ```
 
-92 tests, no external services required (QGRAF binary must be built first).
+310 tests covering tree-level amplitudes, 1-loop integrals, analytic PV scalar integrals, QCD color algebra, QCD+QED mixed processes, cross-section integration, phase-space generation, electroweak decays, and the full FORM/LoopTools pipeline. 96 sidebar example processes tested end-to-end (diagram generation + amplitude). No external services required (QGRAF binary must be built first; LoopTools-dependent tests are auto-skipped when the library is not installed).
+
+---
+
+## Architecture
+
+```
+feynman_engine/
+  amplitudes/
+    form_trace.py             # FORM-based traces: QCD gluon vertices, 2->3 bremsstrahlung
+    symbolic.py               # SymPy Dirac-trace backend (QED/EW/BSM)
+    approximate.py            # Pointwise evaluation via QGRAF diagrams
+    loop.py                   # PV topology classification + scalar integral types
+    analytic_integrals.py     # Closed-form A₀, B₀, C₀, D₀ (no LoopTools)
+    loop_curated.py           # 20 curated 1-loop results
+    looptools_bridge.py       # ctypes wrapper to Fortran LoopTools
+    loop_tensor_reduction.py  # Automatic FORM-based PV reduction
+    color.py                  # SU(3) color algebra matrices
+    cross_section.py          # 2->2 cross-section via SciPy quadrature
+    phase_space.py            # RAMBO 2->N phase-space generation
+    renorm.py                 # MS-bar renormalization + running couplings
+  physics/
+    amplitude.py              # Amplitude router: FORM -> SymPy -> curated -> approximate
+    theories/                 # QED, QCD, QCDQED, EW, BSM particle/vertex defs
+  core/
+    generator.py              # QGRAF wrapper
+    parser.py                 # QGRAF output parser
+    models.py                 # Diagram, Edge, Vertex dataclasses
+    topology.py               # Topology classification (s/t/u/triangle/box)
+  api/
+    routes.py                 # FastAPI endpoints
+    schemas.py                # Pydantic request/response models
+  render/
+    tikz.py                   # TikZ-Feynman LaTeX generation
+    compiler.py               # LuaLaTeX -> PDF -> SVG pipeline
+  form.py                     # FORM build helper
+  looptools.py                # LoopTools build helper
+  qgraf.py                    # QGRAF build helper
+contrib/qgraf/models/
+  qed.mod                     # Pure QED (leptons + photon)
+  qcd.mod                     # Pure QCD (quarks + gluons + ghosts)
+  qcdqed.mod                  # QCD + photon for mixed processes
+  electroweak.mod              # Full SM (all fermions + gamma/Z/W/H)
+  bsm.mod                     # Z' + dark matter
+```
+
+---
+
+## What's not yet implemented
+
+### Parton distribution functions (LHAPDF)
+
+Needed for hadron-collider cross-sections (pp -> X). Without PDFs, the engine computes partonic cross-sections (e.g., gg -> gg) but cannot convolve them with proton structure to get physical pp cross-sections at LHC energies. Integrating LHAPDF would enable predictions for Drell-Yan, dijet production, Higgs production via gluon fusion, etc.
+
+### Real-emission and IR subtraction
+
+The 1-loop virtual corrections (vertex, box) contain infrared divergences --- soft photon/gluon singularities where the loop momentum goes to zero. LoopTools regulates these with tiny fictitious masses (~10^-14 GeV), producing finite but individually unphysical numbers. The KLN theorem guarantees these cancel against real-emission diagrams (e.g., e+e- -> mu+mu- gamma at NLO QED), but without that second piece you cannot quote a physical NLO cross section.
+
+**What you can quote today:** the form factors (like the Schwinger anomalous magnetic moment alpha/(2*pi), which is IR-safe), running couplings (alpha(Q^2), alpha_s(Q^2)), and the structure of the PV decomposition. These are all independently useful to researchers. The 2->3 bremsstrahlung matrix elements (e+e- -> mu+mu- gamma) are already computed at tree level --- the missing piece is the subtraction scheme (Catani-Seymour dipoles or FKS) to combine them with the virtual corrections in a numerically stable way.
+
+### Automatic renormalization
+
+The loop results are "bare" --- they contain UV poles that LoopTools absorbs into its regularization. The finite part depends on the renormalization scheme (MS-bar vs on-shell) and the renormalization scale mu. Without explicit counterterms for arbitrary processes, you cannot say "this is the MS-bar result at mu = m_Z."
+
+**What you can quote today:** the PV integral structure (which integrals appear with which kinematic arguments) is scheme-independent and is exactly what a researcher needs to set up their own calculation. The curated results (Schwinger a_e, vacuum polarization, running couplings) already apply the correct renormalization and are ready to use.

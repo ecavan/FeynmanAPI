@@ -56,6 +56,18 @@ PARTICLES["g"] = Particle(
     antiparticle=None,  # self-conjugate
 )
 
+# ── Photon (needed for mixed QCD+QED processes like u u~ -> gamma g) ─────────
+PARTICLES["gamma"] = Particle(
+    name="gamma",
+    pdg_id=22,
+    particle_type=ParticleType.BOSON,
+    mass="0",
+    charge=0.0,
+    color="1",
+    propagator_style=PropagatorStyle.PHOTON,
+    antiparticle=None,
+)
+
 # ── Ghosts (Faddeev-Popov, needed for loop diagrams) ─────────────────────────
 PARTICLES["gh"] = Particle(
     name="gh",
@@ -105,6 +117,7 @@ QGRAF_NAME_MAP: dict[str, str] = {
     "b":  "bq", "b~": "ba",
     "t":  "tq", "t~": "ta",
     "g":  "G",
+    "gamma": "A",
     "gh": "gh", "gh~": "gha",
 }
 

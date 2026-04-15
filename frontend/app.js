@@ -28,6 +28,14 @@ const PROCESS_DESCRIPTIONS = {
     "Positron-muon scattering via t-channel photon exchange. Like e⁻μ⁻ scattering but with crossed initial-state fermion lines.",
   "mu+ mu- -> e+ e-|QED|0":
     "Muon pair annihilation to electron pairs via s-channel photon. The crossing-symmetric partner of e⁺e⁻ → μ⁺μ⁻.",
+  "e+ e- -> tau+ tau-|QED|0":
+    "Electron-positron annihilation to tau pairs via s-channel photon. Same structure as e⁺e⁻ → μ⁺μ⁻ but with tau mass effects visible near threshold (√s ≈ 2m_τ ≈ 3.55 GeV).",
+  "mu+ mu- -> mu+ mu-|QED|0":
+    "Muon Bhabha scattering: the heavy-lepton analog of e⁺e⁻ → e⁺e⁻, with both s-channel annihilation and t-channel exchange. Relevant for muon collider physics.",
+  "tau+ tau- -> e+ e-|QED|0":
+    "Tau pair annihilation to electrons via s-channel photon. Tests lepton universality — the matrix element is structurally identical to e⁺e⁻ → μ⁺μ⁻.",
+  "tau+ tau- -> mu+ mu-|QED|0":
+    "Tau pair annihilation to muons via s-channel photon. Another lepton-universality test.",
   // QED Radiative
   "e+ e- -> mu+ mu- gamma|QED|0":
     "Initial- or final-state radiation in muon pair production: a real photon is emitted alongside the μ⁺μ⁻ pair. This 2→3 process is essential for understanding radiative corrections.",
@@ -40,6 +48,10 @@ const PROCESS_DESCRIPTIONS = {
   // QED 1-loop
   "e+ e- -> mu+ mu-|QED|1":
     "One-loop corrections to e⁺e⁻ → μ⁺μ⁻ including vertex corrections, vacuum polarization (fermion loops in the photon propagator), and box diagrams. These are the first quantum corrections to the tree-level cross section.",
+  "e+ e- -> e+ e-|QED|1":
+    "One-loop corrections to Bhabha scattering: vacuum polarization insertions in both s-channel and t-channel photon propagators, plus vertex corrections and box diagrams.",
+  "e- e- -> e- e-|QED|1":
+    "One-loop corrections to Møller scattering: vacuum polarization in t-channel and u-channel photon propagators, vertex corrections, and box diagrams.",
   "e- gamma -> e- gamma|QED|1":
     "One-loop corrections to Compton scattering, involving vertex corrections, self-energy insertions, and box diagrams.",
 
@@ -64,6 +76,36 @@ const PROCESS_DESCRIPTIONS = {
     "Identical-quark scattering via t-channel and u-channel gluon exchange, requiring proper antisymmetrization.",
   "u u~ -> s s~|QCD|0":
     "Quark-antiquark annihilation into strange quarks via s-channel gluon.",
+  "d d~ -> g g|QCD|0":
+    "Down quark-antiquark annihilation to gluons. Identical Feynman structure to uū → gg — only the quark mass differs (negligible at high energy).",
+  "d d~ -> s s~|QCD|0":
+    "Down quark pair annihilation to strange quarks via s-channel gluon exchange.",
+  "g g -> t t~|QCD|0":
+    "Gluon fusion to top quarks — the dominant top pair production mechanism at the LHC. Top mass effects are significant since m_t ≈ 173 GeV.",
+  // QCD flavour variants
+  "g g -> c c~|QCD|0":
+    "Gluon fusion to charm quarks. Important for open-charm production at the LHC and charm-tagged jet studies.",
+  "b b~ -> g g|QCD|0":
+    "Bottom quark-antiquark annihilation to gluons. The crossing-symmetric partner of gg → bb̄.",
+  "u s~ -> u s~|QCD|0":
+    "Different-flavour quark-antiquark scattering via t-channel gluon exchange only (no s-channel annihilation for different flavours in pure QCD).",
+  // QCD+QED mixed
+  "u u~ -> gamma gamma|QCDQED|0":
+    "Quark-antiquark annihilation to two photons. A QCD+QED mixed process at O(α²) — no gluon exchange, pure QED-like topology but with coloured initial states.",
+  "u u~ -> gamma g|QCDQED|0":
+    "Associated photon + jet production. An O(αα_s) process important for prompt-photon measurements at hadron colliders.",
+  "u g -> u gamma|QCDQED|0":
+    "QCD Compton with photon emission: a quark scatters off a gluon and radiates a photon. The dominant source of isolated prompt photons at the LHC.",
+  "gamma g -> u u~|QCDQED|0":
+    "Photoproduction of quark pairs: a photon fuses with a gluon to produce a quark-antiquark pair. Important in γp collisions at HERA.",
+  "d d~ -> gamma gamma|QCDQED|0":
+    "Down quark-antiquark annihilation to two photons. Same topology as uū → γγ but with charge -1/3 quarks (coupling scaled by Q_d²).",
+  "d d~ -> gamma g|QCDQED|0":
+    "Associated photon + jet from down-quark annihilation. Probes the photon coupling to down-type quarks.",
+  "d g -> d gamma|QCDQED|0":
+    "Down-quark QCD Compton with prompt photon emission.",
+  "gamma g -> d d~|QCDQED|0":
+    "Photoproduction of down-quark pairs via photon-gluon fusion.",
   // QCD multi-leg
   "u u~ -> g g g|QCD|0":
     "Three-gluon production from quark annihilation — a 2→3 QCD process with rich color structure.",
@@ -78,6 +120,18 @@ const PROCESS_DESCRIPTIONS = {
     "One-loop corrections to qq̄ → gg including virtual gluon loops and ghost contributions from gauge fixing.",
   "g g -> g g|QCD|1":
     "One-loop gluon-gluon scattering: involves gluon, ghost, and quark loops. A classic test of non-Abelian gauge theory.",
+  "u g -> u g|QCD|1":
+    "One-loop corrections to quark-gluon Compton scattering: virtual gluon exchanges, vertex corrections, self-energy insertions, and box diagrams with full SU(3) color structure.",
+  "g g -> u u~|QCD|1":
+    "One-loop virtual corrections to gluon fusion into quark pairs.",
+  // QED 1-loop extras
+  "e+ e- -> gamma gamma|QED|1":
+    "One-loop corrections to electron-positron annihilation into photon pairs: includes vertex corrections and box diagrams.",
+  "gamma gamma -> e+ e-|QED|1":
+    "One-loop corrections to photon-photon pair production: the crossed version of e⁺e⁻ → γγ with virtual fermion loops.",
+  // EW 1-loop
+  "Z -> e+ e-|EW|1":
+    "One-loop corrections to Z decay including electroweak vertex corrections, self-energy insertions, and oblique corrections.",
 
   // ── EW ──
   "Z -> e+ e-|EW|0":
@@ -109,6 +163,8 @@ const PROCESS_DESCRIPTIONS = {
     "Higgs decay to W boson pairs — one of the discovery channels at the LHC (2012). One W is typically off-shell for m_H = 125 GeV.",
   "H -> Z Z|EW|0":
     "H → ZZ*: the 'golden channel' for Higgs discovery due to the clean four-lepton final state.",
+  "t -> b W+|EW|0":
+    "Top quark decay to bottom + W: the dominant (~100%) top decay mode. The top decays so fast (τ ~ 5×10⁻²⁵ s) that it never hadronizes — making it the only bare quark observable in experiment.",
   // Weak Decays
   "mu- -> e- nu_e~ nu_mu|EW|0":
     "Muon decay: the prototypical charged-current weak decay, described by the Fermi theory at low energies. Its lifetime determines the Fermi constant G_F.",
@@ -129,12 +185,20 @@ const PROCESS_DESCRIPTIONS = {
     "Top pair production at e⁺e⁻ colliders via s-channel γ/Z exchange. Enables precision measurements of the top quark mass and electroweak couplings.",
   "e+ e- -> H H|EW|0":
     "Double Higgs production: sensitive to the Higgs self-coupling λ, a key parameter for understanding the shape of the Higgs potential and electroweak symmetry breaking.",
-  "e- nu_e -> W- Z|EW|0":
-    "WZ associated production from electron-neutrino scattering.",
+  "e- nu_e~ -> W- Z|EW|0":
+    "WZ associated production from electron-antineutrino scattering.",
   "tau+ tau- -> Z H|EW|0":
     "Higgsstrahlung from tau pairs.",
   "e+ e- -> W+ W- Z|EW|0":
     "Triple electroweak boson production: a 2→3 process testing quartic gauge couplings.",
+  // Drell-Yan & Neutrino
+  "u d~ -> e+ nu_e|EW|0":
+    "Charged-current Drell-Yan: a u-quark and d̄-antiquark annihilate via an s-channel W⁺ boson to produce a positron and neutrino. The primary W production mechanism at hadron colliders and the process used to discover the W at the SPS in 1983.",
+  "e- nu_mu -> mu- nu_e|EW|0":
+    "Inverse muon decay: neutrino-electron scattering via t-channel W exchange. A purely charged-current process used to measure the Fermi constant and test lepton universality.",
+  // EW 1-loop
+  "e+ e- -> mu+ mu-|EW|1":
+    "One-loop electroweak corrections to e⁺e⁻ → μ⁺μ⁻ including W/Z loops, self-energy insertions, and vertex corrections with the full γ+Z propagator structure.",
 
   // ── BSM ──
   "Zp -> e+ e-|BSM|0":
@@ -180,11 +244,13 @@ const modalDlGroup   = document.getElementById("modal-dl-group");
 const themeToggle      = document.getElementById("theme-toggle");
 const filterNotadpole  = document.getElementById("filter-notadpole");
 const filterOnePi      = document.getElementById("filter-onepi");
+const filterUniqueTopo = document.getElementById("filter-unique-topo");
 const amplitudeSection = document.getElementById("amplitude-section");
 const amplitudeFormula = document.getElementById("amplitude-formula");
 const amplitudeNotes   = document.getElementById("amplitude-notes");
 const integralSection  = document.getElementById("integral-section");
 const integralFormula  = document.getElementById("integral-formula");
+const integralNotes    = document.getElementById("integral-notes");
 const processDescBox   = document.getElementById("process-description");
 const particleTable    = document.getElementById("particle-properties-table");
 
@@ -236,6 +302,17 @@ function updateTheoryFilter(filter) {
     const theory = group.dataset.theory;
     group.style.display = (theory === filter) ? "" : "none";
   });
+  // Sync the theory dropdown with the sidebar tab
+  if (theorySelect.value !== filter) {
+    // Add option if it doesn't exist (e.g. QCDQED before API loads)
+    if (![...theorySelect.options].some(o => o.value === filter)) {
+      const opt = document.createElement("option");
+      opt.value = filter;
+      opt.textContent = filter;
+      theorySelect.appendChild(opt);
+    }
+    theorySelect.value = filter;
+  }
   loadParticles(filter);
 }
 
@@ -267,7 +344,9 @@ async function loadParticles(theory) {
         <thead>
           <tr>
             <th>Name</th>
+            <th>PDG ID</th>
             <th>Mass (MeV)</th>
+            <th>Width (MeV)</th>
             <th>Charge</th>
           </tr>
         </thead>
@@ -276,11 +355,20 @@ async function loadParticles(theory) {
 
     particles.forEach(p => {
       const mass = p.mass_mev !== null ? p.mass_mev.toFixed(3) : (p.mass || "0");
+      const width = p.width_mev !== null && p.width_mev !== undefined
+        ? (p.width_mev > 0 ? p.width_mev.toFixed(3) : "stable")
+        : "\u2014";
       const charge = p.charge !== null ? p.charge : "0";
+      const pdgId = p.pdg_id !== null && p.pdg_id !== undefined ? p.pdg_id : "\u2014";
+      const displayName = p.latex_name
+        ? `<span title="${p.pdg_name || p.name}">${p.name}</span>`
+        : p.name;
       html += `
         <tr>
-          <td class="name">${p.name}</td>
+          <td class="name">${displayName}</td>
+          <td class="pdg-id">${pdgId}</td>
           <td class="mass">${mass}</td>
+          <td class="width">${width}</td>
           <td class="charge">${charge}</td>
         </tr>
       `;
@@ -377,9 +465,10 @@ async function generate() {
         loops: parseInt(loopsSelect.value, 10),
         output_format: "svg",
         filters: {
-          no_tadpoles: filterNotadpole.checked,
-          one_pi:      filterOnePi.checked,
-          connected:   true,
+          no_tadpoles:       filterNotadpole.checked,
+          one_pi:            filterOnePi.checked,
+          connected:         true,
+          unique_topologies: filterUniqueTopo.checked,
         },
       }),
     });
@@ -396,13 +485,7 @@ async function generate() {
     exportBtn.disabled = false;
 
     const loopOrder = parseInt(loopsSelect.value, 10);
-    if (loopOrder === 0) {
-      fetchAmplitude(process, theorySelect.value);
-    } else {
-      // For loop diagrams, fetch the loop integral representation.
-      amplitudeSection.classList.add("hidden");
-      fetchLoopIntegral(process, theorySelect.value, loopOrder);
-    }
+    fetchAmplitude(process, theorySelect.value, loopOrder);
 
   } catch (err) {
     showError(String(err));
@@ -412,49 +495,73 @@ async function generate() {
 }
 
 // ── Amplitude ─────────────────────────────────────────────────────────────────
-async function fetchAmplitude(process, theory) {
+async function fetchAmplitude(process, theory, loops = 0) {
   try {
     const res = await fetch(
-      `${API_BASE}/amplitude?process=${encodeURIComponent(process)}&theory=${encodeURIComponent(theory)}`
+      `${API_BASE}/amplitude?process=${encodeURIComponent(process)}&theory=${encodeURIComponent(theory)}&loops=${loops}`
     );
-    if (!res.ok) { amplitudeSection.classList.add("hidden"); integralSection.classList.add("hidden"); return; }
-    const data = await res.json();
+    const data = await _readJson(res);
+    if (!res.ok) {
+      const message = data?.detail || "Tree-level |M|² and integral information are not available for this process.";
+      showAmplitudeUnavailable(message);
+      showIntegralUnavailable(message);
+      return;
+    }
 
     // ── |M|² section ─────────────────────────────────────────────────────────
-    // Only show when msq_sympy is non-empty (i.e. full amplitude was computed).
-    if (data.msq_sympy) {
+    if (data.has_msq) {
+      amplitudeFormula.classList.remove("formula-unavailable");
+      const approx = data.approximation_level === "approximate-pointwise";
+      const relation = approx ? "\\approx" : "=";
       if (data.msq_latex && typeof katex !== "undefined") {
         try {
-          katex.render(`|\\mathcal{M}|^2 = ${data.msq_latex}`, amplitudeFormula, {
+          katex.render(`|\\mathcal{M}|^2 ${relation} ${data.msq_latex}`, amplitudeFormula, {
             displayMode: true,
             throwOnError: false,
             trust: true,
           });
         } catch (_) {
-          amplitudeFormula.textContent = `|M|² = ${data.msq_sympy}`;
+          amplitudeFormula.textContent = `|M|² ${approx ? "≈" : "="} ${data.msq_sympy}`;
         }
       } else {
-        amplitudeFormula.textContent = `|M|² = ${data.msq_sympy}`;
+        amplitudeFormula.textContent = `|M|² ${approx ? "≈" : "="} ${data.msq_sympy}`;
       }
-      const desc  = data.description || "";
-      const notes = data.notes || "";
-      amplitudeNotes.textContent = desc + (notes ? "  ·  " + notes : "");
+      const details = [];
+      if (data.description) details.push(data.description);
+      if (data.approximation_level) details.push(`Approximation: ${data.approximation_level}`);
+      if (data.evaluation_point?.label) details.push(`Point: ${data.evaluation_point.label}`);
+      if (data.notes) details.push(data.notes);
+      amplitudeNotes.textContent = details.join("  ·  ");
       amplitudeSection.classList.remove("hidden");
     } else {
-      amplitudeSection.classList.add("hidden");
+      showAmplitudeUnavailable(
+        data.notes ||
+        data.availability_message ||
+        "Spin-averaged |M|² is not available yet for this process."
+      );
     }
 
     // ── Integral section ──────────────────────────────────────────────────────
-    // Show whenever integral_latex is present, even if |M|² wasn't computed.
-    _renderIntegral(data.integral_latex);
+    if (data.has_integral) {
+      _renderIntegral(data.integral_latex || null);
+    } else {
+      showIntegralUnavailable(
+        data.availability_message ||
+        "An integral representation is not available yet for this process."
+      );
+    }
   } catch (_) {
-    amplitudeSection.classList.add("hidden");
-    integralSection.classList.add("hidden");
+    showAmplitudeUnavailable("Tree-level |M|² is not available right now.");
+    showIntegralUnavailable("The integral representation is not available right now.");
   }
 }
 
 function _renderIntegral(latex_str) {
-  if (!latex_str) { integralSection.classList.add("hidden"); return; }
+  if (!latex_str) {
+    showIntegralUnavailable("An integral representation is not available yet for this process.");
+    return;
+  }
+  integralFormula.classList.remove("formula-unavailable");
   if (typeof katex !== "undefined") {
     try {
       katex.render(latex_str, integralFormula, {
@@ -468,6 +575,7 @@ function _renderIntegral(latex_str) {
   } else {
     integralFormula.textContent = latex_str;
   }
+  integralNotes.textContent = "";
   integralSection.classList.remove("hidden");
 }
 
@@ -477,11 +585,46 @@ async function fetchLoopIntegral(process, theory, loops) {
     const res = await fetch(
       `${API_BASE}/amplitude/loop-integral?process=${encodeURIComponent(process)}&theory=${encodeURIComponent(theory)}&loops=${loops}`
     );
-    if (!res.ok) { integralSection.classList.add("hidden"); return; }
-    const data = await res.json();
-    _renderIntegral(data.integral_latex || null);
+    const data = await _readJson(res);
+    if (!res.ok) {
+      showIntegralUnavailable(
+        data?.detail || `A ${loops}-loop integral representation is not available for this process.`
+      );
+      return;
+    }
+    if (data.has_integral) {
+      _renderIntegral(data.integral_latex || null);
+    } else {
+      showIntegralUnavailable(
+        data.availability_message ||
+        data.notes ||
+        `A ${loops}-loop integral representation is not available for this process.`
+      );
+    }
   } catch (_) {
-    integralSection.classList.add("hidden");
+    showIntegralUnavailable("The loop integral representation is not available right now.");
+  }
+}
+
+function showAmplitudeUnavailable(message) {
+  amplitudeFormula.classList.add("formula-unavailable");
+  amplitudeFormula.textContent = "|M|² is not available yet for this process.";
+  amplitudeNotes.textContent = message || "";
+  amplitudeSection.classList.remove("hidden");
+}
+
+function showIntegralUnavailable(message) {
+  integralFormula.classList.add("formula-unavailable");
+  integralFormula.textContent = "An integral representation is not available yet for this process.";
+  integralNotes.textContent = message || "";
+  integralSection.classList.remove("hidden");
+}
+
+async function _readJson(res) {
+  try {
+    return await res.json();
+  } catch (_) {
+    return null;
   }
 }
 

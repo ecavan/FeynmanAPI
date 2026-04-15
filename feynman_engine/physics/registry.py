@@ -37,6 +37,13 @@ class TheoryRegistry:
             "qgraf_name_map": _ew.QGRAF_NAME_MAP,
             "qgraf_name_reverse": _ew.QGRAF_NAME_REVERSE,
         },
+        "QCDQED": {
+            "particles": _qcd.PARTICLES,
+            "vertices": _qcd.VERTICES,
+            "model_file": "qcdqed.mod",
+            "qgraf_name_map": _qcd.QGRAF_NAME_MAP,
+            "qgraf_name_reverse": _qcd.QGRAF_NAME_REVERSE,
+        },
         "BSM": {
             "particles": _bsm.PARTICLES,
             "vertices": _bsm.VERTICES,

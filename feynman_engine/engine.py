@@ -141,11 +141,13 @@ class FeynmanEngine:
         ]
         lualatex_found = any(Path(p).exists() for p in lualatex_paths) or bool(shutil.which("lualatex"))
 
+        from feynman_engine.amplitudes.looptools_bridge import is_available as _lt_avail
         return {
             "backend": backend_name(),
             "qgraf_available": qgraf_available(),
             "qgraf_source_available": qgraf_source_available(),
             "lualatex_available": lualatex_found,
             "pdf2svg_available": bool(shutil.which("pdf2svg")),
+            "looptools_available": _lt_avail(),
             "theories": self.list_theories(),
         }

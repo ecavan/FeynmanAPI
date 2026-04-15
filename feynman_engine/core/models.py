@@ -4,10 +4,7 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
-try:
-    from particle import Particle as PDGParticle
-except ImportError:  # pragma: no cover - optional at import time
-    PDGParticle = None
+from particle import Particle as PDGParticle
 
 
 class ParticleType(str, Enum):
@@ -45,7 +42,7 @@ class Particle(BaseModel):
     width_mev: Optional[float] = None
 
     def model_post_init(self, __context) -> None:
-        if self.pdg_id is None or PDGParticle is None:
+        if self.pdg_id is None:
             return
         try:
             pdg_particle = PDGParticle.from_pdgid(self.pdg_id)

@@ -31,12 +31,105 @@
         <div class="theory-tabs">
           <button class="theory-tab active" data-filter="QED">QED</button>
           <button class="theory-tab" data-filter="QCD">QCD</button>
+          <button class="theory-tab" data-filter="QCDQED">QCD+QED</button>
           <button class="theory-tab" data-filter="EW">EW</button>
           <button class="theory-tab" data-filter="BSM">BSM</button>
         </div>
 
         <div class="example-list">
-          <!-- ── EW: Gauge Boson Decays ─────────────────────────────────────── -->
+
+          <!-- ══════════════════ QED ══════════════════ -->
+          <div class="example-group" data-theory="QED">
+            <div class="example-group-label">Tree 2→2</div>
+            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="QED" data-loops="0">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag">s-chan.</span></button>
+            <button class="example-btn" data-process="e+ e- -> e+ e-" data-theory="QED" data-loops="0">e⁺e⁻ → e⁺e⁻ <span class="ex-tag">Bhabha</span></button>
+            <button class="example-btn" data-process="e- gamma -> e- gamma" data-theory="QED" data-loops="0">e⁻γ → e⁻γ <span class="ex-tag">Compton</span></button>
+            <button class="example-btn" data-process="e- e- -> e- e-" data-theory="QED" data-loops="0">e⁻e⁻ → e⁻e⁻ <span class="ex-tag">Møller</span></button>
+            <button class="example-btn" data-process="e+ e- -> gamma gamma" data-theory="QED" data-loops="0">e⁺e⁻ → γγ <span class="ex-tag">annihil.</span></button>
+            <button class="example-btn" data-process="gamma gamma -> e+ e-" data-theory="QED" data-loops="0">γγ → e⁺e⁻ <span class="ex-tag">pair prod.</span></button>
+            <button class="example-btn" data-process="mu+ mu- -> gamma gamma" data-theory="QED" data-loops="0">μ⁺μ⁻ → γγ <span class="ex-tag">annihil.</span></button>
+            <button class="example-btn" data-process="e- mu- -> e- mu-" data-theory="QED" data-loops="0">e⁻μ⁻ → e⁻μ⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="e+ mu- -> e+ mu-" data-theory="QED" data-loops="0">e⁺μ⁻ → e⁺μ⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="mu+ mu- -> e+ e-" data-theory="QED" data-loops="0">μ⁺μ⁻ → e⁺e⁻ <span class="ex-tag">s-chan.</span></button>
+            <button class="example-btn" data-process="e+ e- -> tau+ tau-" data-theory="QED" data-loops="0">e⁺e⁻ → τ⁺τ⁻ <span class="ex-tag">s-chan.</span></button>
+            <button class="example-btn" data-process="mu+ mu- -> mu+ mu-" data-theory="QED" data-loops="0">μ⁺μ⁻ → μ⁺μ⁻ <span class="ex-tag">μ Bhabha</span></button>
+            <button class="example-btn" data-process="tau+ tau- -> e+ e-" data-theory="QED" data-loops="0">τ⁺τ⁻ → e⁺e⁻ <span class="ex-tag">s-chan.</span></button>
+            <button class="example-btn" data-process="tau+ tau- -> mu+ mu-" data-theory="QED" data-loops="0">τ⁺τ⁻ → μ⁺μ⁻ <span class="ex-tag">s-chan.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="QED">
+            <div class="example-group-label">Tree 2→3 (Bremsstrahlung)</div>
+            <button class="example-btn" data-process="e+ e- -> mu+ mu- gamma" data-theory="QED" data-loops="0">e⁺e⁻ → μ⁺μ⁻γ <span class="ex-tag">brem.</span></button>
+            <button class="example-btn" data-process="e+ e- -> e+ e- gamma" data-theory="QED" data-loops="0">e⁺e⁻ → e⁺e⁻γ <span class="ex-tag">brem.</span></button>
+            <button class="example-btn" data-process="e- gamma -> e- gamma gamma" data-theory="QED" data-loops="0">e⁻γ → e⁻γγ <span class="ex-tag">dbl Compton</span></button>
+            <button class="example-btn" data-process="mu+ mu- -> e+ e- gamma" data-theory="QED" data-loops="0">μ⁺μ⁻ → e⁺e⁻γ <span class="ex-tag">brem.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="QED">
+            <div class="example-group-label">1-Loop</div>
+            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="QED" data-loops="1">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag ex-tag-loop">VP + vertex + box</span></button>
+            <button class="example-btn" data-process="e+ e- -> e+ e-" data-theory="QED" data-loops="1">e⁺e⁻ → e⁺e⁻ <span class="ex-tag ex-tag-loop">Bhabha VP</span></button>
+            <button class="example-btn" data-process="e- e- -> e- e-" data-theory="QED" data-loops="1">e⁻e⁻ → e⁻e⁻ <span class="ex-tag ex-tag-loop">Møller VP</span></button>
+            <button class="example-btn" data-process="e- gamma -> e- gamma" data-theory="QED" data-loops="1">e⁻γ → e⁻γ <span class="ex-tag ex-tag-loop">Compton VP</span></button>
+            <button class="example-btn" data-process="e+ e- -> gamma gamma" data-theory="QED" data-loops="1">e⁺e⁻ → γγ <span class="ex-tag ex-tag-loop">annihil. VP</span></button>
+            <button class="example-btn" data-process="gamma gamma -> e+ e-" data-theory="QED" data-loops="1">γγ → e⁺e⁻ <span class="ex-tag ex-tag-loop">pair prod. VP</span></button>
+          </div>
+
+          <!-- ══════════════════ QCD ══════════════════ -->
+          <div class="example-group" data-theory="QCD">
+            <div class="example-group-label">Tree 2→2 — Core</div>
+            <button class="example-btn" data-process="u u~ -> g g" data-theory="QCD" data-loops="0">uū → gg <span class="ex-tag">qq̄ ann.</span></button>
+            <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="0">gg → gg <span class="ex-tag">gluon scat.</span></button>
+            <button class="example-btn" data-process="g g -> u u~" data-theory="QCD" data-loops="0">gg → uū <span class="ex-tag">gluon fus.</span></button>
+            <button class="example-btn" data-process="u g -> u g" data-theory="QCD" data-loops="0">ug → ug <span class="ex-tag">qg Compton</span></button>
+            <button class="example-btn" data-process="u u~ -> u u~" data-theory="QCD" data-loops="0">uū → uū <span class="ex-tag">s+t chan.</span></button>
+            <button class="example-btn" data-process="u u -> u u" data-theory="QCD" data-loops="0">uu → uu <span class="ex-tag">identical</span></button>
+            <button class="example-btn" data-process="u d~ -> u d~" data-theory="QCD" data-loops="0">ud̄ → ud̄ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="u u~ -> d d~" data-theory="QCD" data-loops="0">uū → dd̄ <span class="ex-tag">s-chan.</span></button>
+            <button class="example-btn" data-process="u u~ -> s s~" data-theory="QCD" data-loops="0">uū → ss̄ <span class="ex-tag">flav. change</span></button>
+          </div>
+
+          <div class="example-group" data-theory="QCD">
+            <div class="example-group-label">Tree 2→2 — Heavy Flavour</div>
+            <button class="example-btn" data-process="g g -> t t~" data-theory="QCD" data-loops="0">gg → tt̄ <span class="ex-tag">top prod.</span></button>
+            <button class="example-btn" data-process="g g -> b b~" data-theory="QCD" data-loops="0">gg → bb̄ <span class="ex-tag">b prod.</span></button>
+            <button class="example-btn" data-process="g g -> c c~" data-theory="QCD" data-loops="0">gg → cc̄ <span class="ex-tag">charm prod.</span></button>
+            <button class="example-btn" data-process="b b~ -> g g" data-theory="QCD" data-loops="0">bb̄ → gg <span class="ex-tag">b ann.</span></button>
+            <button class="example-btn" data-process="d d~ -> g g" data-theory="QCD" data-loops="0">dd̄ → gg <span class="ex-tag">d ann.</span></button>
+            <button class="example-btn" data-process="d d~ -> s s~" data-theory="QCD" data-loops="0">dd̄ → ss̄ <span class="ex-tag">flav. change</span></button>
+            <button class="example-btn" data-process="u s~ -> u s~" data-theory="QCD" data-loops="0">us̄ → us̄ <span class="ex-tag">t-chan.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="QCD">
+            <div class="example-group-label">Tree 2→3 (Multi-Jet)</div>
+            <button class="example-btn" data-process="u u~ -> g g g" data-theory="QCD" data-loops="0">uū → ggg <span class="ex-tag">3-jet</span></button>
+            <button class="example-btn" data-process="g g -> u u~ g" data-theory="QCD" data-loops="0">gg → uūg <span class="ex-tag">3-jet</span></button>
+            <button class="example-btn" data-process="g g -> g g g" data-theory="QCD" data-loops="0">gg → ggg <span class="ex-tag">5-gluon</span></button>
+            <button class="example-btn" data-process="u g -> u g g" data-theory="QCD" data-loops="0">ug → ugg <span class="ex-tag">3-jet</span></button>
+          </div>
+
+          <div class="example-group" data-theory="QCD">
+            <div class="example-group-label">1-Loop</div>
+            <button class="example-btn" data-process="u u~ -> g g" data-theory="QCD" data-loops="1">uū → gg <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
+            <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="1">gg → gg <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
+            <button class="example-btn" data-process="u g -> u g" data-theory="QCD" data-loops="1">ug → ug <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
+            <button class="example-btn" data-process="g g -> u u~" data-theory="QCD" data-loops="1">gg → uū <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
+          </div>
+
+          <!-- ══════════════════ QCD+QED ══════════════════ -->
+          <div class="example-group" data-theory="QCDQED">
+            <div class="example-group-label">Tree 2→2 — Mixed</div>
+            <button class="example-btn" data-process="u u~ -> gamma gamma" data-theory="QCDQED" data-loops="0">uū → γγ <span class="ex-tag">di-photon</span></button>
+            <button class="example-btn" data-process="u u~ -> gamma g" data-theory="QCDQED" data-loops="0">uū → γg <span class="ex-tag">γ+jet</span></button>
+            <button class="example-btn" data-process="u g -> u gamma" data-theory="QCDQED" data-loops="0">ug → uγ <span class="ex-tag">prompt γ</span></button>
+            <button class="example-btn" data-process="gamma g -> u u~" data-theory="QCDQED" data-loops="0">γg → uū <span class="ex-tag">photo-prod.</span></button>
+            <button class="example-btn" data-process="d d~ -> gamma gamma" data-theory="QCDQED" data-loops="0">dd̄ → γγ <span class="ex-tag">di-photon</span></button>
+            <button class="example-btn" data-process="d d~ -> gamma g" data-theory="QCDQED" data-loops="0">dd̄ → γg <span class="ex-tag">γ+jet</span></button>
+            <button class="example-btn" data-process="d g -> d gamma" data-theory="QCDQED" data-loops="0">dg → dγ <span class="ex-tag">prompt γ</span></button>
+            <button class="example-btn" data-process="gamma g -> d d~" data-theory="QCDQED" data-loops="0">γg → dd̄ <span class="ex-tag">photo-prod.</span></button>
+          </div>
+
+          <!-- ══════════════════ EW ══════════════════ -->
           <div class="example-group" data-theory="EW">
             <div class="example-group-label">Gauge Boson Decays</div>
             <button class="example-btn" data-process="Z -> e+ e-" data-theory="EW" data-loops="0">Z → e⁺e⁻ <span class="ex-tag ex-tag-decay">1→2</span></button>
@@ -49,114 +142,70 @@
             <button class="example-btn" data-process="W+ -> tau+ nu_tau" data-theory="EW" data-loops="0">W⁺ → τ⁺ντ <span class="ex-tag ex-tag-decay">1→2</span></button>
           </div>
 
-          <!-- ── EW: Higgs Decays ───────────────────────────────────────────── -->
           <div class="example-group" data-theory="EW">
-            <div class="example-group-label">Higgs Decays</div>
-            <button class="example-btn" data-process="H -> b b~" data-theory="EW" data-loops="0">H → bb̄ <span class="ex-tag ex-tag-decay">dominant</span></button>
+            <div class="example-group-label">Higgs & Top Decays</div>
+            <button class="example-btn" data-process="H -> b b~" data-theory="EW" data-loops="0">H → bb̄ <span class="ex-tag ex-tag-decay">58% BR</span></button>
             <button class="example-btn" data-process="H -> tau+ tau-" data-theory="EW" data-loops="0">H → τ⁺τ⁻ <span class="ex-tag ex-tag-decay">Yukawa</span></button>
             <button class="example-btn" data-process="H -> c c~" data-theory="EW" data-loops="0">H → cc̄ <span class="ex-tag ex-tag-decay">Yukawa</span></button>
-            <button class="example-btn" data-process="H -> mu+ mu-" data-theory="EW" data-loops="0">H → μ⁺μ⁻ <span class="ex-tag ex-tag-decay">Yukawa</span></button>
+            <button class="example-btn" data-process="H -> mu+ mu-" data-theory="EW" data-loops="0">H → μ⁺μ⁻ <span class="ex-tag ex-tag-decay">rare</span></button>
             <button class="example-btn" data-process="H -> W+ W-" data-theory="EW" data-loops="0">H → W⁺W⁻ <span class="ex-tag ex-tag-decay">gauge</span></button>
-            <button class="example-btn" data-process="H -> Z Z" data-theory="EW" data-loops="0">H → ZZ <span class="ex-tag ex-tag-decay">gauge</span></button>
+            <button class="example-btn" data-process="H -> Z Z" data-theory="EW" data-loops="0">H → ZZ <span class="ex-tag ex-tag-decay">golden ch.</span></button>
+            <button class="example-btn" data-process="t -> b W+" data-theory="EW" data-loops="0">t → bW⁺ <span class="ex-tag ex-tag-decay">~100% BR</span></button>
           </div>
 
-          <!-- ── EW: Weak (1→3) Decays ─────────────────────────────────────── -->
           <div class="example-group" data-theory="EW">
-            <div class="example-group-label">Weak Decays (1 → 3)</div>
+            <div class="example-group-label">Weak Decays (1→3)</div>
             <button class="example-btn" data-process="mu- -> e- nu_e~ nu_mu" data-theory="EW" data-loops="0">μ⁻ → e⁻ν̄ₑνμ <span class="ex-tag ex-tag-decay">muon</span></button>
             <button class="example-btn" data-process="tau- -> mu- nu_mu~ nu_tau" data-theory="EW" data-loops="0">τ⁻ → μ⁻ν̄μντ <span class="ex-tag ex-tag-decay">tau→μ</span></button>
             <button class="example-btn" data-process="tau- -> e- nu_e~ nu_tau" data-theory="EW" data-loops="0">τ⁻ → e⁻ν̄ₑντ <span class="ex-tag ex-tag-decay">tau→e</span></button>
           </div>
 
-          <!-- ── EW: Scattering ────────────────────────────────────────────── -->
           <div class="example-group" data-theory="EW">
-            <div class="example-group-label">EW Scattering</div>
+            <div class="example-group-label">Drell-Yan & Neutrino</div>
+            <button class="example-btn" data-process="u d~ -> e+ nu_e" data-theory="EW" data-loops="0">ud̄ → e⁺νₑ <span class="ex-tag">CC DY</span></button>
+            <button class="example-btn" data-process="e- nu_mu -> mu- nu_e" data-theory="EW" data-loops="0">e⁻νμ → μ⁻νₑ <span class="ex-tag">ν scat.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">Tree 2→2 Scattering</div>
             <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="EW" data-loops="0">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag">γ + Z</span></button>
             <button class="example-btn" data-process="e+ e- -> W+ W-" data-theory="EW" data-loops="0">e⁺e⁻ → W⁺W⁻ <span class="ex-tag">4 diags</span></button>
             <button class="example-btn" data-process="e+ e- -> Z H" data-theory="EW" data-loops="0">e⁺e⁻ → ZH <span class="ex-tag">Higgsstrahlung</span></button>
             <button class="example-btn" data-process="e+ e- -> Z Z" data-theory="EW" data-loops="0">e⁺e⁻ → ZZ <span class="ex-tag">2→2</span></button>
             <button class="example-btn" data-process="e+ e- -> t t~" data-theory="EW" data-loops="0">e⁺e⁻ → tt̄ <span class="ex-tag">top pair</span></button>
             <button class="example-btn" data-process="e+ e- -> H H" data-theory="EW" data-loops="0">e⁺e⁻ → HH <span class="ex-tag">double H</span></button>
-            <button class="example-btn" data-process="e- nu_e -> W- Z" data-theory="EW" data-loops="0">e⁻νₑ → W⁻Z <span class="ex-tag">WZ prod.</span></button>
+            <button class="example-btn" data-process="e- nu_e~ -> W- Z" data-theory="EW" data-loops="0">e⁻ν̄ₑ → W⁻Z <span class="ex-tag">WZ prod.</span></button>
             <button class="example-btn" data-process="tau+ tau- -> Z H" data-theory="EW" data-loops="0">τ⁺τ⁻ → ZH <span class="ex-tag">2→2</span></button>
-            <button class="example-btn" data-process="e+ e- -> W+ W- Z" data-theory="EW" data-loops="0">e⁺e⁻ → W⁺W⁻Z <span class="ex-tag">2→3</span></button>
           </div>
 
-          <!-- ── QED ───────────────────────────────────────────────────────── -->
-          <div class="example-group" data-theory="QED">
-            <div class="example-group-label">QED — 2 → 2</div>
-            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="QED" data-loops="0">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag">s-chan.</span></button>
-            <button class="example-btn" data-process="e+ e- -> e+ e-" data-theory="QED" data-loops="0">e⁺e⁻ → e⁺e⁻ <span class="ex-tag">Bhabha</span></button>
-            <button class="example-btn" data-process="e- gamma -> e- gamma" data-theory="QED" data-loops="0">e⁻γ → e⁻γ <span class="ex-tag">Compton</span></button>
-            <button class="example-btn" data-process="e- e- -> e- e-" data-theory="QED" data-loops="0">e⁻e⁻ → e⁻e⁻ <span class="ex-tag">Møller</span></button>
-            <button class="example-btn" data-process="e+ e- -> gamma gamma" data-theory="QED" data-loops="0">e⁺e⁻ → γγ <span class="ex-tag">annihil.</span></button>
-            <button class="example-btn" data-process="gamma gamma -> e+ e-" data-theory="QED" data-loops="0">γγ → e⁺e⁻ <span class="ex-tag">pair prod.</span></button>
-            <button class="example-btn" data-process="mu+ mu- -> gamma gamma" data-theory="QED" data-loops="0">μ⁺μ⁻ → γγ <span class="ex-tag">annihil.</span></button>
-            <button class="example-btn" data-process="e- mu- -> e- mu-" data-theory="QED" data-loops="0">e⁻μ⁻ → e⁻μ⁻ <span class="ex-tag">t-chan.</span></button>
-            <button class="example-btn" data-process="e+ mu- -> e+ mu-" data-theory="QED" data-loops="0">e⁺μ⁻ → e⁺μ⁻ <span class="ex-tag">t-chan.</span></button>
-            <button class="example-btn" data-process="mu+ mu- -> e+ e-" data-theory="QED" data-loops="0">μ⁺μ⁻ → e⁺e⁻ <span class="ex-tag">s-chan.</span></button>
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">Tree 2→3</div>
+            <button class="example-btn" data-process="e+ e- -> W+ W- Z" data-theory="EW" data-loops="0">e⁺e⁻ → W⁺W⁻Z <span class="ex-tag">tri-boson</span></button>
           </div>
 
-          <div class="example-group" data-theory="QED">
-            <div class="example-group-label">QED — Radiative (2 → 3)</div>
-            <button class="example-btn" data-process="e+ e- -> mu+ mu- gamma" data-theory="QED" data-loops="0">e⁺e⁻ → μ⁺μ⁻γ <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="e+ e- -> e+ e- gamma" data-theory="QED" data-loops="0">e⁺e⁻ → e⁺e⁻γ <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="e- gamma -> e- gamma gamma" data-theory="QED" data-loops="0">e⁻γ → e⁻γγ <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="mu+ mu- -> e+ e- gamma" data-theory="QED" data-loops="0">μ⁺μ⁻ → e⁺e⁻γ <span class="ex-tag">2→3</span></button>
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">1-Loop</div>
+            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="EW" data-loops="1">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag ex-tag-loop">γ+Z 1-loop</span></button>
+            <button class="example-btn" data-process="Z -> e+ e-" data-theory="EW" data-loops="1">Z → e⁺e⁻ <span class="ex-tag ex-tag-loop">Z decay VP</span></button>
           </div>
 
-          <div class="example-group" data-theory="QED">
-            <div class="example-group-label">QED — 1-loop</div>
-            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="QED" data-loops="1">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag ex-tag-loop">1-loop</span></button>
-            <button class="example-btn" data-process="e- gamma -> e- gamma" data-theory="QED" data-loops="1">e⁻γ → e⁻γ <span class="ex-tag ex-tag-loop">1-loop</span></button>
-          </div>
-
-          <!-- ── QCD ───────────────────────────────────────────────────────── -->
-          <div class="example-group" data-theory="QCD">
-            <div class="example-group-label">QCD — 2 → 2</div>
-            <button class="example-btn" data-process="u u~ -> g g" data-theory="QCD" data-loops="0">uū → gg <span class="ex-tag">qbar ann.</span></button>
-            <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="0">gg → gg <span class="ex-tag">gluon scat.</span></button>
-            <button class="example-btn" data-process="g g -> u u~" data-theory="QCD" data-loops="0">gg → uū <span class="ex-tag">gluon fus.</span></button>
-            <button class="example-btn" data-process="g g -> b b~" data-theory="QCD" data-loops="0">gg → bb̄ <span class="ex-tag">gluon fus.</span></button>
-            <button class="example-btn" data-process="u u~ -> u u~" data-theory="QCD" data-loops="0">uū → uū <span class="ex-tag">2→2</span></button>
-            <button class="example-btn" data-process="u d~ -> u d~" data-theory="QCD" data-loops="0">ud̄ → ud̄ <span class="ex-tag">2→2</span></button>
-            <button class="example-btn" data-process="u u~ -> d d~" data-theory="QCD" data-loops="0">uū → dd̄ <span class="ex-tag">2→2</span></button>
-            <button class="example-btn" data-process="u g -> u g" data-theory="QCD" data-loops="0">ug → ug <span class="ex-tag">qg Compton</span></button>
-            <button class="example-btn" data-process="u u -> u u" data-theory="QCD" data-loops="0">uu → uu <span class="ex-tag">identical</span></button>
-            <button class="example-btn" data-process="u u~ -> s s~" data-theory="QCD" data-loops="0">uū → ss̄ <span class="ex-tag">2→2</span></button>
-          </div>
-
-          <div class="example-group" data-theory="QCD">
-            <div class="example-group-label">QCD — Multi-leg (2 → 3)</div>
-            <button class="example-btn" data-process="u u~ -> g g g" data-theory="QCD" data-loops="0">uū → ggg <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="g g -> u u~ g" data-theory="QCD" data-loops="0">gg → uūg <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="g g -> g g g" data-theory="QCD" data-loops="0">gg → ggg <span class="ex-tag">2→3</span></button>
-            <button class="example-btn" data-process="u g -> u g g" data-theory="QCD" data-loops="0">ug → ugg <span class="ex-tag">2→3</span></button>
-          </div>
-
-          <div class="example-group" data-theory="QCD">
-            <div class="example-group-label">QCD — 1-loop</div>
-            <button class="example-btn" data-process="u u~ -> g g" data-theory="QCD" data-loops="1">uū → gg <span class="ex-tag ex-tag-loop">1-loop</span></button>
-            <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="1">gg → gg <span class="ex-tag ex-tag-loop">1-loop</span></button>
-          </div>
-
-          <!-- ── BSM ───────────────────────────────────────────────────────── -->
+          <!-- ══════════════════ BSM ══════════════════ -->
           <div class="example-group" data-theory="BSM">
-            <div class="example-group-label">BSM — Z' Decays</div>
+            <div class="example-group-label">Z' Decays</div>
             <button class="example-btn" data-process="Zp -> e+ e-" data-theory="BSM" data-loops="0">Z' → e⁺e⁻ <span class="ex-tag ex-tag-decay">1→2</span></button>
             <button class="example-btn" data-process="Zp -> mu+ mu-" data-theory="BSM" data-loops="0">Z' → μ⁺μ⁻ <span class="ex-tag ex-tag-decay">1→2</span></button>
             <button class="example-btn" data-process="Zp -> chi chi~" data-theory="BSM" data-loops="0">Z' → χχ̄ <span class="ex-tag ex-tag-decay">DM prod.</span></button>
           </div>
 
           <div class="example-group" data-theory="BSM">
-            <div class="example-group-label">BSM — DM Production</div>
+            <div class="example-group-label">DM Production</div>
             <button class="example-btn" data-process="e+ e- -> chi chi~" data-theory="BSM" data-loops="0">e⁺e⁻ → χχ̄ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="mu+ mu- -> chi chi~" data-theory="BSM" data-loops="0">μ⁺μ⁻ → χχ̄ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="e+ e- -> Zp Zp" data-theory="BSM" data-loops="0">e⁺e⁻ → Z'Z' <span class="ex-tag">pair prod.</span></button>
           </div>
 
           <div class="example-group" data-theory="BSM">
-            <div class="example-group-label">BSM — DM Annihilation</div>
+            <div class="example-group-label">DM Annihilation</div>
             <button class="example-btn" data-process="chi chi~ -> e+ e-" data-theory="BSM" data-loops="0">χχ̄ → e⁺e⁻ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="chi chi~ -> mu+ mu-" data-theory="BSM" data-loops="0">χχ̄ → μ⁺μ⁻ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="chi chi~ -> chi chi~" data-theory="BSM" data-loops="0">χχ̄ → χχ̄ <span class="ex-tag">DM scat.</span></button>
@@ -283,7 +332,7 @@
 
           <!-- Particle Properties -->
           <div class="ref-subgroup">
-            <div class="ref-subgroup-label">Particle Properties</div>
+            <div class="ref-subgroup-label">Particle Properties (PDG / hepunits)</div>
             <div id="particle-properties-table" class="particle-table-container">
               <div class="loading-small">Select a theory to load...</div>
             </div>
@@ -338,6 +387,10 @@
             <input type="checkbox" id="filter-onepi" />
             1PI only
           </label>
+          <label class="filter-check" title="Show one representative diagram per topology class (s-channel, t-channel, etc.)">
+            <input type="checkbox" id="filter-unique-topo" />
+            Unique topologies
+          </label>
         </div>
 
         <div id="validation-msg" class="validation-msg"></div>
@@ -361,6 +414,7 @@
       <section id="integral-section" class="integral-panel hidden">
         <h3>Amplitude Integral  <span class="integral-subtitle">i𝓜</span></h3>
         <div id="integral-formula" class="integral-formula"></div>
+        <div id="integral-notes" class="integral-notes"></div>
       </section>
 
       <div id="loading" class="loading hidden">

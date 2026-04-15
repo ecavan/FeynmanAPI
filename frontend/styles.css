@@ -116,20 +116,25 @@ main {
   flex-wrap: wrap;
   gap: 3px;
   margin-bottom: 0.625rem;
+  padding: 0 0.5rem;
 }
 
 .theory-tab {
+  flex: 1 1 auto;
+  min-width: 0;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text-muted);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 3px 7px;
+  letter-spacing: 0.02em;
+  padding: 4px 4px;
+  text-align: center;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
 }
 
 .theory-tab:hover { background: var(--code-bg); color: var(--text); }
@@ -265,7 +270,9 @@ details:not([open]) .sidebar-section-header::after {
 }
 
 .particle-table td.name { font-weight: 700; color: var(--text); }
+.particle-table td.pdg-id { color: var(--text-muted); font-size: 0.6rem; }
 .particle-table td.mass { color: var(--accent); }
+.particle-table td.width { color: var(--text-muted); }
 .particle-table td.charge { color: var(--text-muted); }
 
 .loading-small {
@@ -276,8 +283,16 @@ details:not([open]) .sidebar-section-header::after {
   font-style: italic;
 }
 
+.example-group {
+  margin-bottom: 0.75rem;
+}
+
+.example-group:last-child {
+  margin-bottom: 0;
+}
+
 .example-group-label {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -574,6 +589,14 @@ input[type="text"]:focus, select:focus { border-color: var(--accent); }
   color: var(--danger);
 }
 
+.amplitude-formula.formula-unavailable,
+.integral-formula.formula-unavailable {
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
 .amplitude-notes {
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -651,6 +674,12 @@ input[type="text"]:focus, select:focus { border-color: var(--accent); }
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--danger);
+}
+
+.integral-notes {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 /* ── Loading / Error ─────────────────────────────────────────────────────── */

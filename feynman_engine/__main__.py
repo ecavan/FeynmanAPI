@@ -40,6 +40,30 @@ def main():
     )
     qgraf_parser.add_argument("--force", action="store_true")
 
+    # ── install-looptools ─────────────────────────────────────────────────
+    lt_parser = subparsers.add_parser(
+        "install-looptools",
+        help="Build LoopTools shared library from the bundled source archive",
+    )
+    lt_parser.add_argument(
+        "--target",
+        default=None,
+        help="Optional output path for the compiled shared library",
+    )
+    lt_parser.add_argument("--force", action="store_true")
+
+    # ── install-form ───────────────────────────────────────────────────
+    form_parser = subparsers.add_parser(
+        "install-form",
+        help="Build FORM symbolic algebra tool from the bundled source archive",
+    )
+    form_parser.add_argument(
+        "--target",
+        default=None,
+        help="Optional output path for the compiled form binary",
+    )
+    form_parser.add_argument("--force", action="store_true")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -89,6 +113,20 @@ def main():
         target = Path(args.target).expanduser() if args.target else None
         built = build_qgraf(target=target, force=args.force)
         print(f"Built QGRAF at {built}")
+
+    elif args.command == "install-looptools":
+        from feynman_engine.looptools import build_looptools
+
+        target = Path(args.target).expanduser() if args.target else None
+        built = build_looptools(target=target, force=args.force)
+        print(f"Built LoopTools at {built}")
+
+    elif args.command == "install-form":
+        from feynman_engine.form import build_form
+
+        target = Path(args.target).expanduser() if args.target else None
+        built = build_form(target=target, force=args.force)
+        print(f"Built FORM at {built}")
 
 
 if __name__ == "__main__":

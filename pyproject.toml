@@ -15,6 +15,8 @@ dependencies = [
     "uvicorn[standard]>=0.27",
     "sympy>=1.12",
     "particle>=0.26,<0.27",
+    "hepunits>=2.3",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -35,7 +37,7 @@ include = ["feynman_engine*"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-feynman_engine = ["resources/qgraf/*.tgz"]
+feynman_engine = ["resources/qgraf/*.tgz", "resources/looptools/*.tar", "resources/form/*.tar.gz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

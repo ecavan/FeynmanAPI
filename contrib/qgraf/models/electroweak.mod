@@ -48,18 +48,20 @@
 [bq, ba, Z]
 [tq, ta, Z]
 % W couplings (charged current)
+% Leptons
 [em, nuea, Wp]
 [nue, ep, Wm]
 [mum, numua, Wp]
 [numu, mup, Wm]
 [taum, nutaua, Wp]
 [nutau, taup, Wm]
-[uq, da, Wp]
-[dq, ua, Wm]
-[cq, sa, Wp]
-[sq, ca, Wm]
-[tq, ba, Wp]
-[bq, ta, Wm]
+% Quarks (Wp/Wm swapped for W propagator pairing)
+[uq, da, Wm]
+[dq, ua, Wp]
+[cq, sa, Wm]
+[sq, ca, Wp]
+[tq, ba, Wm]
+[bq, ta, Wp]
 % Gauge self-couplings
 [Wp, Wm, A]
 [Wp, Wm, Z]
