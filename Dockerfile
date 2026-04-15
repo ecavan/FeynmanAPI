@@ -20,7 +20,9 @@ WORKDIR /build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     libc6-dev \
+    libstdc++-12-dev \
     make \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,7 +32,7 @@ RUN mkdir -p src \
     && tar -xzf form-5.0.0.tar.gz -C src \
     && cd src/form-* \
     && ./configure --disable-float --disable-parform \
-    && make -j4 \
+    && make -j1 \
     && cp sources/form /build/form \
     && chmod +x /build/form
 
