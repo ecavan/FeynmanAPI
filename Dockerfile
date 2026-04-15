@@ -54,10 +54,10 @@ RUN mkdir -p src \
     && tar -xf LoopTools-2.16.tar -C src \
     && cd src/LoopTools-2.16 \
     && ./configure --prefix=/build/install FFLAGS="-fPIC -O2" CFLAGS="-fPIC -O2" \
-    && make -j4 \
+    && make -j1 \
     && gfortran -shared \
          -o /build/liblooptools.so \
-         -Wl,--whole-archive build/libooptools.a --no-whole-archive \
+         -Wl,--whole-archive build/libooptools.a -Wl,--no-whole-archive \
          -lgfortran -lm
 
 # ─── Production image ────────────────────────────────────────────────────────
