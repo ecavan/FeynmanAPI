@@ -57,7 +57,7 @@ RUN mkdir -p src \
     && make -j1 \
     && gfortran -shared \
          -o /build/liblooptools.so \
-         -Wl,--whole-archive build/libooptools.a -Wl,--no-whole-archive \
+         -Wl,--whole-archive,build/libooptools.a,--no-whole-archive \
          -lgfortran -lm
 
 # ─── Production image ────────────────────────────────────────────────────────
