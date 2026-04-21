@@ -62,17 +62,28 @@ def _candidate_paths() -> list[Path]:
     ]
 
 
+def find_library_path() -> Path | None:
+    """Return the configured/loadable LoopTools library path, if present on disk."""
+    path = os.environ.get(_ENV_VAR)
+    if path:
+        candidate = Path(path).expanduser()
+        if candidate.exists():
+            return candidate
+
+    for candidate in _candidate_paths():
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
 def _load() -> ctypes.CDLL:
     global _lib
     if _lib is not None:
         return _lib
 
-    path = os.environ.get(_ENV_VAR)
-    if not path:
-        for candidate in _candidate_paths():
-            if candidate.exists():
-                path = str(candidate)
-                break
+    candidate = find_library_path()
+    path = str(candidate) if candidate else None
 
     if not path:
         raise RuntimeError(

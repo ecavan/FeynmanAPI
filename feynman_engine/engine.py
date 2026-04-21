@@ -132,22 +132,16 @@ class FeynmanEngine:
 
     def status(self) -> dict:
         """Return backend and dependency status."""
-        import shutil
-        from pathlib import Path
+        from feynman_engine.diagnostics import collect_diagnostics
 
-        lualatex_paths = [
-            "/usr/local/texlive/2026basic/bin/universal-darwin/lualatex",
-            "/Library/TeX/texbin/lualatex",
-        ]
-        lualatex_found = any(Path(p).exists() for p in lualatex_paths) or bool(shutil.which("lualatex"))
-
-        from feynman_engine.amplitudes.looptools_bridge import is_available as _lt_avail
+        diagnostics = collect_diagnostics()
         return {
-            "backend": backend_name(),
-            "qgraf_available": qgraf_available(),
-            "qgraf_source_available": qgraf_source_available(),
-            "lualatex_available": lualatex_found,
-            "pdf2svg_available": bool(shutil.which("pdf2svg")),
-            "looptools_available": _lt_avail(),
+            **diagnostics,
+            "qgraf_available": diagnostics["qgraf"]["available"],
+            "qgraf_source_available": diagnostics["qgraf"]["source_available"],
+            "form_available": diagnostics["form"]["available"],
+            "looptools_available": diagnostics["looptools"]["available"],
+            "lualatex_available": diagnostics["rendering"]["lualatex_available"],
+            "pdf2svg_available": diagnostics["rendering"]["pdf2svg_available"],
             "theories": self.list_theories(),
         }

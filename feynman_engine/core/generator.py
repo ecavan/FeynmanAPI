@@ -58,6 +58,11 @@ def qgraf_available() -> bool:
     return _qgraf_pipe_path() is not None or _qgraf_std_path() is not None
 
 
+def qgraf_binary_path() -> Path | None:
+    """Return the preferred usable QGRAF executable path, if any."""
+    return _qgraf_pipe_path() or _qgraf_std_path()
+
+
 def require_qgraf() -> None:
     """Raise a clear error if no usable QGRAF binary is present."""
     if qgraf_available():

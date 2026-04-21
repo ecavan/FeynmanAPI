@@ -11,6 +11,20 @@ A Feynman diagram generator and amplitude calculator for particle physics. Give 
 - [FastAPI](https://fastapi.tiangolo.com/) --- modern async Python web framework
 - [SciPy](https://scipy.org/) --- numerical integration for cross-section calculations
 
+## Citation guidance
+
+If you use FeynmanEngine in research, cite the software itself and also cite the wrapped tools that are materially involved in your workflow. In particular:
+
+- Foundational Feynman-diagram formalism: R. P. Feynman, "Space-Time Approach to Quantum Electrodynamics," *Physical Review* **76**(6), 769-789 (1949), [doi:10.1103/PhysRev.76.769](https://doi.org/10.1103/PhysRev.76.769)
+- Passarino-Veltman reduction for 1-loop amplitudes: G. Passarino and M. J. G. Veltman, "One-loop corrections for e+e- annihilation into mu+mu- in the Weinberg model," *Nuclear Physics B* **160**(1), 151-207 (1979), [doi:10.1016/0550-3213(79)90234-7](https://doi.org/10.1016/0550-3213(79)90234-7)
+- Practical one-loop techniques and electroweak radiative corrections: A. Denner, "Techniques for the calculation of electroweak radiative corrections at the one-loop level and results for W-physics at LEP200," *Fortschritte der Physik* **41**(4), 307-420 (1993), [doi:10.1002/prop.2190410402](https://doi.org/10.1002/prop.2190410402)
+- QGRAF for diagram generation: P. Nogueira, "Automatic Feynman graph generation," *Journal of Computational Physics* **105**(2), 279-289 (1993), [doi:10.1006/jcph.1993.1074](https://doi.org/10.1006/jcph.1993.1074)
+- FORM for symbolic trace/algebra workflows: J. A. M. Vermaseren, "New features of FORM," arXiv:[math-ph/0010025](https://arxiv.org/abs/math-ph/0010025) (2000)
+- LoopTools for numerical 1-loop evaluation: T. Hahn and M. Perez-Victoria, "Automatized one-loop calculations in four and D dimensions," *Computer Physics Communications* **118**(2-5), 153-165 (1999), [doi:10.1016/S0010-4655(98)00173-8](https://doi.org/10.1016/S0010-4655(98)00173-8)
+- RAMBO for flat multiparticle phase-space generation: R. Kleiss, W. J. Stirling, and S. D. Ellis, "A new Monte Carlo treatment of multiparticle phase space at high energies," *Computer Physics Communications* **40**(2-3), 359-373 (1986), [doi:10.1016/0010-4655(86)90119-0](https://doi.org/10.1016/0010-4655(86)90119-0)
+
+Classic background textbooks that fit the scope of this project include M. E. Peskin and D. V. Schroeder, *An Introduction to Quantum Field Theory* (1995), and R. K. Ellis, W. J. Stirling, and B. R. Webber, *QCD and Collider Physics* (1996).
+
 ---
 
 ## What it does
@@ -169,7 +183,66 @@ References: 't Hooft & Veltman (1979), Denner (1993), Ellis & Zanderighi (2008),
 
 ---
 
-## Local setup
+## Installation
+
+There are three good ways to run FeynmanEngine, depending on how much setup you want to do yourself.
+
+### Option 1: Docker (easiest, everything bundled)
+
+If you want the smoothest install experience, use Docker. The Docker image includes the FastAPI app, packaged frontend, QGRAF, FORM, LoopTools, and the LaTeX/SVG rendering stack.
+
+Build the image from this repository:
+
+```bash
+git clone https://github.com/ecavan/FeynmanAPI.git
+cd FeynmanAPI
+
+docker build -t feynman-engine .
+docker run --rm -p 8000:10000 feynman-engine
+```
+
+Then open **http://localhost:8000** for the browser UI, or **http://localhost:8000/docs** for the API explorer.
+
+### Option 2: PyPI / pip install (lightest Python install)
+
+Use this if you want the Python package and browser UI first, and are okay installing heavier native tools only if you need them.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install feynman-engine
+```
+
+Start the app:
+
+```bash
+feynman serve --host 127.0.0.1 --port 8000
+```
+
+Then open **http://localhost:8000** for the browser UI, or **http://localhost:8000/docs** for the API explorer.
+
+Optional post-install native tools:
+
+```bash
+# Recommended one-command native setup
+feynman setup
+
+# If you only want the recommended QGRAF + FORM setup
+feynman setup --skip-looptools
+
+# Inspect what is installed and where it was found
+feynman doctor
+```
+
+Under the hood, `feynman setup` runs the individual installers for:
+
+- `feynman install-qgraf` for diagram enumeration from the bundled QGRAF source archive
+- `feynman install-form` for FORM-based symbolic traces, including QCD color algebra and some higher-complexity amplitudes
+- `feynman install-looptools` for numerical 1-loop evaluation
+
+This split keeps `pip install` lightweight and reliable, while still giving users a path to the heavier compiled dependencies when they need them.
+
+### Option 3: Local source setup (development)
 
 **Requirements:** Python 3.11+, C compiler (for FORM), gfortran (for QGRAF and LoopTools), LuaLaTeX + pdf2svg (optional, for SVG rendering)
 
@@ -181,14 +254,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Build the QGRAF binary from the bundled source archive
-feynman install-qgraf
-
-# Build FORM for symbolic trace computation (QCD color algebra, 2->3 processes)
-feynman install-form
-
-# (Optional) Build LoopTools for numerical 1-loop evaluation
-feynman install-looptools
+# Build the bundled native tools in one go
+feynman setup
 ```
 
 ### Install rendering tools (for SVG output)
@@ -208,12 +275,15 @@ sudo apt-get install -y texlive-luatex texlive-pictures texlive-science pdf2svg
 
 ## Run the app
 
+If you installed from PyPI or from source, the browser UI is bundled with the package and served by the same FastAPI process as the API. You do not need to start a separate frontend dev server.
+
 ```bash
-source .venv/bin/activate
-uvicorn feynman_engine.api.app:app --reload
+feynman serve --host 127.0.0.1 --port 8000
 ```
 
 Open **http://localhost:8000** for the browser UI, or **http://localhost:8000/docs** for the API explorer.
+
+For local development from a clone, `uvicorn feynman_engine.api.app:app --reload` still works.
 
 ### Quick API examples
 
@@ -256,7 +326,7 @@ curl "http://localhost:8000/api/amplitude/running-coupling?coupling=alpha&q_sq=1
 | GET | `/api/amplitude/loop-pv` | Symbolic PV decomposition with individual term coefficients |
 | GET | `/api/amplitude/loop-evaluate` | Numerically evaluate 1-loop observable via LoopTools |
 | GET | `/api/amplitude/loop-analytic` | Evaluate PV scalar integral analytically (no LoopTools required) |
-| GET | `/api/amplitude/loop-curated` | List all 10 curated 1-loop results |
+| GET | `/api/amplitude/loop-curated` | List all 20 curated 1-loop results |
 | GET | `/api/amplitude/running-coupling` | alpha(mu^2) or alpha_s(mu^2) at given scale |
 | GET | `/api/amplitude/renorm-status` | UV counterterms and their values |
 | GET | `/api/amplitude/renorm-selfenergy` | Renormalized photon self-energy |
@@ -273,7 +343,19 @@ source .venv/bin/activate
 pytest
 ```
 
-310 tests covering tree-level amplitudes, 1-loop integrals, analytic PV scalar integrals, QCD color algebra, QCD+QED mixed processes, cross-section integration, phase-space generation, electroweak decays, and the full FORM/LoopTools pipeline. 96 sidebar example processes tested end-to-end (diagram generation + amplitude). No external services required (QGRAF binary must be built first; LoopTools-dependent tests are auto-skipped when the library is not installed).
+317 tests covering tree-level amplitudes, 1-loop integrals, analytic PV scalar integrals, QCD color algebra, QCD+QED mixed processes, cross-section integration, phase-space generation, electroweak decays, and the full FORM/LoopTools pipeline. 96 sidebar example processes tested end-to-end (diagram generation + amplitude). No external services required (QGRAF binary must be built first; LoopTools-dependent tests are auto-skipped when the library is not installed).
+
+---
+
+## Release workflow
+
+1. Update the version in `pyproject.toml`, `CITATION.cff`, and `.zenodo.json`.
+2. Commit and push to GitHub.
+3. Create a GitHub Release for that version tag.
+4. GitHub Actions publishes the built wheel/sdist to PyPI via `.github/workflows/python-publish.yml`.
+5. If the repository is enabled in Zenodo, the same GitHub Release is archived there and gets a version DOI.
+
+For better citation metadata on Zenodo/GitHub, add either `CITATION.cff` or `.zenodo.json` before creating the release. If both files exist, Zenodo uses `.zenodo.json`.
 
 ---
 

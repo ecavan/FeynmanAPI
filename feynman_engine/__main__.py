@@ -2,6 +2,67 @@
 import sys
 
 
+def _run_setup(force: bool, include_looptools: bool) -> int:
+    from feynman_engine.form import build_form
+    from feynman_engine.looptools import build_looptools
+    from feynman_engine.qgraf import build_qgraf
+
+    steps = [
+        ("QGRAF", build_qgraf),
+        ("FORM", build_form),
+    ]
+    if include_looptools:
+        steps.append(("LoopTools", build_looptools))
+
+    results: list[tuple[str, str, str]] = []
+    failures = False
+
+    for label, builder in steps:
+        print(f"[setup] Building {label}...")
+        try:
+            built = builder(force=force)
+        except Exception as exc:  # pragma: no cover - exercised via tests
+            failures = True
+            results.append((label, "failed", str(exc)))
+            print(f"[setup] {label} failed")
+        else:
+            results.append((label, "ok", str(built)))
+            print(f"[setup] {label} ready at {built}")
+
+    if not include_looptools:
+        results.append(("LoopTools", "skipped", "not requested"))
+
+    print("\nSetup summary:")
+    for label, status, detail in results:
+        print(f"  {label}: {status} - {detail}")
+
+    if failures:
+        print(
+            "\nOne or more setup steps failed. "
+            "You can rerun individual installers after fixing the missing toolchain."
+        )
+        return 1
+
+    if not include_looptools:
+        print(
+            "\nSetup complete. "
+            "Run `feynman install-looptools` later if you want numerical 1-loop evaluation."
+        )
+    else:
+        print("\nSetup complete.")
+    return 0
+
+
+def _run_doctor() -> int:
+    from feynman_engine.diagnostics import collect_diagnostics, summarize_doctor_report
+
+    diagnostics = collect_diagnostics()
+    print(summarize_doctor_report(diagnostics))
+    if diagnostics["qgraf"]["available"] and diagnostics["form"]["available"]:
+        return 0
+    return 1
+
+
 def main():
     import argparse
     import json
@@ -63,6 +124,33 @@ def main():
         help="Optional output path for the compiled form binary",
     )
     form_parser.add_argument("--force", action="store_true")
+
+    # ── setup / install-all ───────────────────────────────────────────────
+    setup_parser = subparsers.add_parser(
+        "setup",
+        aliases=["install-all"],
+        help="Build the bundled native dependencies in one command",
+    )
+    setup_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Rebuild binaries/libraries even if the target already exists",
+    )
+    setup_parser.add_argument(
+        "--skip-looptools",
+        action="store_true",
+        help="Skip LoopTools if you only want the recommended QGRAF + FORM setup",
+    )
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Inspect which native dependencies are installed and where they were found",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the raw diagnostics as JSON",
+    )
 
     args = parser.parse_args()
 
@@ -127,6 +215,18 @@ def main():
         target = Path(args.target).expanduser() if args.target else None
         built = build_form(target=target, force=args.force)
         print(f"Built FORM at {built}")
+
+    elif args.command in {"setup", "install-all"}:
+        code = _run_setup(force=args.force, include_looptools=not args.skip_looptools)
+        raise SystemExit(code)
+
+    elif args.command == "doctor":
+        if args.json:
+            from feynman_engine.diagnostics import collect_diagnostics
+
+            print(json.dumps(collect_diagnostics(), indent=2))
+            raise SystemExit(0)
+        raise SystemExit(_run_doctor())
 
 
 if __name__ == "__main__":

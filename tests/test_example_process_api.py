@@ -10,7 +10,7 @@ from feynman_engine.api.app import app
 
 
 def _frontend_examples() -> list[tuple[str, str, int]]:
-    html = (Path(__file__).resolve().parent.parent / "frontend" / "index.html").read_text()
+    html = (Path(__file__).resolve().parent.parent / "feynman_engine" / "frontend" / "index.html").read_text()
     pattern = re.compile(
         r'<button class="example-btn"[^>]*data-process="([^"]+)"'
         r'[^>]*data-theory="([^"]+)"[^>]*data-loops="([^"]+)"'
@@ -32,6 +32,26 @@ EXAMPLES = _frontend_examples()
 @pytest.fixture(scope="module")
 def client() -> TestClient:
     return TestClient(app)
+
+
+def test_frontend_root_serves_packaged_ui(client: TestClient):
+    response = client.get("/")
+    assert response.status_code == 200, response.text
+    assert "FeynmanEngine" in response.text
+
+
+def test_status_reports_nested_dependency_diagnostics(client: TestClient):
+    response = client.get("/api/status")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "qgraf" in payload
+    assert "form" in payload
+    assert "looptools" in payload
+    assert "rendering" in payload
+    assert "toolchain" in payload
+    assert "available" in payload["qgraf"]
+    assert "available" in payload["form"]
+    assert "available" in payload["looptools"]
 
 
 @pytest.mark.parametrize(("process", "theory", "loops"), EXAMPLES)

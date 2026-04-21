@@ -1,0 +1,113 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "FeynmanEngine"
+version: "0.1.0"
+type: software
+license: "GPL-3.0-only"
+abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service."
+authors:
+  - family-names: "Cavan"
+    given-names: "Elijah"
+repository-code: "https://github.com/ecavan/FeynmanAPI"
+url: "https://github.com/ecavan/FeynmanAPI"
+keywords:
+  - particle physics
+  - feynman diagrams
+  - scattering amplitudes
+  - quantum field theory
+  - qgraf
+  - form
+  - looptools
+  - fastapi
+references:
+  - type: article
+    title: "Space-Time Approach to Quantum Electrodynamics"
+    authors:
+      - family-names: "Feynman"
+        given-names: "R. P."
+    journal: "Physical Review"
+    volume: 76
+    issue: 6
+    start: 769
+    end: 789
+    year: 1949
+    doi: "10.1103/PhysRev.76.769"
+    url: "https://doi.org/10.1103/PhysRev.76.769"
+  - type: article
+    title: "One-loop corrections for e+e- annihilation into mu+mu- in the Weinberg model"
+    authors:
+      - family-names: "Passarino"
+        given-names: "G."
+      - family-names: "Veltman"
+        given-names: "M. J. G."
+    journal: "Nuclear Physics B"
+    volume: 160
+    issue: 1
+    start: 151
+    end: 207
+    year: 1979
+    doi: "10.1016/0550-3213(79)90234-7"
+    url: "https://doi.org/10.1016/0550-3213(79)90234-7"
+  - type: article
+    title: "Techniques for the calculation of electroweak radiative corrections at the one-loop level and results for W-physics at LEP200"
+    authors:
+      - family-names: "Denner"
+        given-names: "A."
+    journal: "Fortschritte der Physik"
+    volume: 41
+    issue: 4
+    start: 307
+    end: 420
+    year: 1993
+    doi: "10.1002/prop.2190410402"
+    url: "https://doi.org/10.1002/prop.2190410402"
+  - type: article
+    title: "Automatic Feynman graph generation"
+    authors:
+      - family-names: "Nogueira"
+        given-names: "P."
+    journal: "Journal of Computational Physics"
+    volume: 105
+    issue: 2
+    start: 279
+    end: 289
+    year: 1993
+    doi: "10.1006/jcph.1993.1074"
+    url: "https://doi.org/10.1006/jcph.1993.1074"
+  - type: article
+    title: "New features of FORM"
+    authors:
+      - family-names: "Vermaseren"
+        given-names: "J. A. M."
+    year: 2000
+    url: "https://arxiv.org/abs/math-ph/0010025"
+  - type: article
+    title: "Automatized one-loop calculations in four and D dimensions"
+    authors:
+      - family-names: "Hahn"
+        given-names: "T."
+      - family-names: "Perez-Victoria"
+        given-names: "M."
+    journal: "Computer Physics Communications"
+    volume: 118
+    start: 153
+    end: 165
+    year: 1999
+    doi: "10.1016/S0010-4655(98)00173-8"
+    url: "https://doi.org/10.1016/S0010-4655(98)00173-8"
+  - type: article
+    title: "A new Monte Carlo treatment of multiparticle phase space at high energies"
+    authors:
+      - family-names: "Kleiss"
+        given-names: "R."
+      - family-names: "Stirling"
+        given-names: "W. J."
+      - family-names: "Ellis"
+        given-names: "S. D."
+    journal: "Computer Physics Communications"
+    volume: 40
+    start: 359
+    end: 373
+    year: 1986
+    doi: "10.1016/0010-4655(86)90119-0"
+    url: "https://doi.org/10.1016/0010-4655(86)90119-0"

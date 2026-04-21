@@ -1,10 +1,11 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
 from feynman_engine.api.routes import router
 
@@ -28,8 +29,8 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
 
-    # Serve frontend static files if the frontend directory exists
-    frontend_dir = Path(__file__).parent.parent.parent / "frontend"
+    # Prefer the packaged frontend so `pip install feynman-engine` serves the UI.
+    frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
     if frontend_dir.exists():
         app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
