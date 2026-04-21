@@ -1,5 +1,8 @@
 # FeynmanEngine
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19673075.svg)](https://doi.org/10.5281/zenodo.19673075)
+[![PyPI](https://img.shields.io/pypi/v/feynman-engine)](https://pypi.org/project/feynman-engine/)
+
 A Feynman diagram generator and amplitude calculator for particle physics. Give it a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams as SVG/TikZ, the symbolic spin-averaged |M|^2, integrated cross-sections, and --- for standard processes --- numerically evaluated 1-loop results via LoopTools.
 
 **Built on proven HEP tooling:**
@@ -185,8 +188,6 @@ References: 't Hooft & Veltman (1979), Denner (1993), Ellis & Zanderighi (2008),
 
 ## Installation
 
-There are three good ways to run FeynmanEngine, depending on how much setup you want to do yourself.
-
 ### Option 1: Docker (easiest, everything bundled)
 
 If you want the smoothest install experience, use Docker. The Docker image includes the FastAPI app, packaged frontend, QGRAF, FORM, LoopTools, and the LaTeX/SVG rendering stack.
@@ -283,7 +284,7 @@ feynman serve --host 127.0.0.1 --port 8000
 
 Open **http://localhost:8000** for the browser UI, or **http://localhost:8000/docs** for the API explorer.
 
-For local development from a clone, `uvicorn feynman_engine.api.app:app --reload` still works.
+For local development from a clone, `uvicorn feynman_engine.api.app:app --reload` 
 
 ### Quick API examples
 
@@ -317,7 +318,7 @@ curl "http://localhost:8000/api/amplitude/running-coupling?coupling=alpha&q_sq=1
 
 ---
 
-## API reference (selected endpoints)
+## API reference
 
 | Method | Path | Description |
 |---|---|---|
@@ -334,30 +335,9 @@ curl "http://localhost:8000/api/amplitude/running-coupling?coupling=alpha&q_sq=1
 | GET | `/api/theories/{theory}/particles` | Particle registry for a theory |
 | GET | `/api/status` | Backend and dependency status |
 
----
-
-## Run tests
-
-```bash
-source .venv/bin/activate
-pytest
-```
-
-317 tests covering tree-level amplitudes, 1-loop integrals, analytic PV scalar integrals, QCD color algebra, QCD+QED mixed processes, cross-section integration, phase-space generation, electroweak decays, and the full FORM/LoopTools pipeline. 96 sidebar example processes tested end-to-end (diagram generation + amplitude). No external services required (QGRAF binary must be built first; LoopTools-dependent tests are auto-skipped when the library is not installed).
 
 ---
 
-## Release workflow
-
-1. Update the version in `pyproject.toml`, `CITATION.cff`, and `.zenodo.json`.
-2. Commit and push to GitHub.
-3. Create a GitHub Release for that version tag.
-4. GitHub Actions publishes the built wheel/sdist to PyPI via `.github/workflows/python-publish.yml`.
-5. If the repository is enabled in Zenodo, the same GitHub Release is archived there and gets a version DOI.
-
-For better citation metadata on Zenodo/GitHub, add either `CITATION.cff` or `.zenodo.json` before creating the release. If both files exist, Zenodo uses `.zenodo.json`.
-
----
 
 ## Architecture
 
@@ -403,20 +383,26 @@ contrib/qgraf/models/
 
 ---
 
-## What's not yet implemented
+## Roadmap
 
-### Parton distribution functions (LHAPDF)
+### What you can do today
 
-Needed for hadron-collider cross-sections (pp -> X). Without PDFs, the engine computes partonic cross-sections (e.g., gg -> gg) but cannot convolve them with proton structure to get physical pp cross-sections at LHC energies. Integrating LHAPDF would enable predictions for Drell-Yan, dijet production, Higgs production via gluon fusion, etc.
+- Full tree-level |M|^2 for any QED, QCD, QCD+QED, electroweak, or BSM process, with cross-sections
+- 1-loop PV decomposition with symbolic coefficients for any process QGRAF can generate
+- Analytic closed-form evaluation of all PV scalar integrals (A₀, B₀, C₀, D₀) --- pure Python, no Fortran required
+- Numerical evaluation via LoopTools for the full tensor integral basis
+- IR-safe observables: Schwinger anomalous magnetic moment alpha/(2pi), running couplings alpha(Q^2) and alpha_s(Q^2), vacuum polarization, form factors
+- 2->3 bremsstrahlung matrix elements at tree level (e.g. e+e- -> mu+mu- gamma)
+- MS-bar counterterms and running couplings for curated processes
 
-### Real-emission and IR subtraction
+### Parton distribution functions
 
-The 1-loop virtual corrections (vertex, box) contain infrared divergences --- soft photon/gluon singularities where the loop momentum goes to zero. LoopTools regulates these with tiny fictitious masses (~10^-14 GeV), producing finite but individually unphysical numbers. The KLN theorem guarantees these cancel against real-emission diagrams (e.g., e+e- -> mu+mu- gamma at NLO QED), but without that second piece you cannot quote a physical NLO cross section.
+Needed for hadron-collider cross-sections (pp -> X). The engine computes partonic cross-sections (e.g. gg -> gg) but cannot yet convolve them with proton structure for physical pp predictions at LHC energies. Integrating [LHAPDF](https://lhapdf.hepforge.org/) would enable Drell-Yan, dijet, and Higgs production via gluon fusion predictions.
 
-**What you can quote today:** the form factors (like the Schwinger anomalous magnetic moment alpha/(2*pi), which is IR-safe), running couplings (alpha(Q^2), alpha_s(Q^2)), and the structure of the PV decomposition. These are all independently useful to researchers. The 2->3 bremsstrahlung matrix elements (e+e- -> mu+mu- gamma) are already computed at tree level --- the missing piece is the subtraction scheme (Catani-Seymour dipoles or FKS) to combine them with the virtual corrections in a numerically stable way.
+### Real-emission IR subtraction
 
-### Automatic renormalization
+1-loop virtual corrections contain infrared divergences that cancel against real-emission diagrams (KLN theorem). The real-emission matrix elements are already computed at tree level --- the missing piece is an IR subtraction scheme (Catani-Seymour dipoles or FKS slicing) to combine virtual + real corrections into a finite, physical NLO cross-section.
 
-The loop results are "bare" --- they contain UV poles that LoopTools absorbs into its regularization. The finite part depends on the renormalization scheme (MS-bar vs on-shell) and the renormalization scale mu. Without explicit counterterms for arbitrary processes, you cannot say "this is the MS-bar result at mu = m_Z."
+### Automatic renormalization for arbitrary processes
 
-**What you can quote today:** the PV integral structure (which integrals appear with which kinematic arguments) is scheme-independent and is exactly what a researcher needs to set up their own calculation. The curated results (Schwinger a_e, vacuum polarization, running couplings) already apply the correct renormalization and are ready to use.
+The curated 1-loop results already apply correct MS-bar renormalization. Extending this to arbitrary processes requires generating counterterm diagrams and applying scheme-dependent subtractions automatically. The PV integral structure produced by the engine is scheme-independent and ready for users to apply their own renormalization.
