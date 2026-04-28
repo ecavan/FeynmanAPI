@@ -34,6 +34,13 @@ dev = [
     "pytest-asyncio>=0.23",
     "httpx>=0.26",
 ]
+# Optional LHAPDF backend for proton PDFs.  The pip wheel pulls in the
+# LHAPDF6 C++ library; PDF *sets* (e.g. CT18LO) are downloaded separately
+# via `lhapdf install <SetName>`.  When unavailable the package falls back
+# to the built-in LO-simple parametrization automatically.
+lhapdf = [
+    "lhapdf>=6.5",
+]
 
 [project.scripts]
 feynman = "feynman_engine.__main__:main"
@@ -50,6 +57,8 @@ feynman_engine = [
     "resources/qgraf/*.tgz",
     "resources/looptools/*.tar",
     "resources/form/*.tar.gz",
+    "resources/lhapdf/*.tar.gz",
+    "resources/openloops/*.tar.gz",
     "frontend/*",
 ]
 

@@ -116,16 +116,21 @@ def test_curated_amplitudes_backfill_integral_representation(client: TestClient)
         assert payload["integral_latex"]
 
 
-def test_valid_tree_process_without_exact_backend_returns_approximate_payload(client: TestClient):
+def test_valid_tree_process_without_exact_backend_returns_unsupported(client: TestClient):
+    """Processes with no real symbolic backend are honestly unsupported.
+
+    The approximate-pointwise single-point proxy was removed in V1; if no
+    backend produces a real |M|²(s,t,u) function, the API surfaces an
+    ``integral_latex`` (so users can see the topology) but ``has_msq`` is
+    False and the response carries an ``availability_message``.
+    """
     response = client.get("/api/amplitude", params={"process": "e- nu_e~ -> W- Z", "theory": "EW"})
     assert response.status_code == 200, response.text
 
     payload = response.json()
-    assert payload["supported"] is True
-    assert payload["has_msq"] is True
-    assert payload["has_integral"] is True
-    assert payload["approximation_level"] == "approximate-pointwise"
-    assert payload["evaluation_point"]
+    assert payload["supported"] is False
+    assert payload["has_msq"] is False
+    assert payload["availability_message"]
 
 
 def test_decay_process_returns_exact_symbolic(client: TestClient):
@@ -167,7 +172,10 @@ def test_non_example_qed_tau_process_generates_and_returns_msq(client: TestClien
     assert payload["has_integral"] is True
 
 
-def test_loop_process_returns_pointwise_proxy_when_available(client: TestClient):
+def test_loop_process_returns_symbolic_pv_expansion(client: TestClient):
+    """Loop-level e+e-→μ+μ- returns a symbolic PV-reduced |M|² (in terms of
+    A₀/B₀/C₀/D₀ scalar integrals) plus the loop integral representation.
+    """
     response = client.get(
         "/api/amplitude",
         params={"process": "e+ e- -> mu+ mu-", "theory": "QED", "loops": 1},
@@ -175,11 +183,11 @@ def test_loop_process_returns_pointwise_proxy_when_available(client: TestClient)
     assert response.status_code == 200, response.text
 
     payload = response.json()
-    assert payload["supported"] is True
-    assert payload["has_msq"] is True
+    # Loop amplitude is now a real symbolic function of the kinematic
+    # invariants (PV-reduced).  No more single-point proxy.
     assert payload["has_integral"] is True
-    assert payload["approximation_level"] == "approximate-pointwise"
-    assert payload["evaluation_point"]
+    if payload["has_msq"]:
+        assert payload["is_symbolic_function"] is True
 
 
 def test_valid_but_unsupported_loop_process_returns_unavailable_payload(client: TestClient):

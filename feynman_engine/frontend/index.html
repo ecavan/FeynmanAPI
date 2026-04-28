@@ -396,26 +396,97 @@
         <div id="validation-msg" class="validation-msg"></div>
       </section>
 
-      <section id="results-section" class="hidden">
-        <div id="process-description" class="process-description hidden"></div>
-        <div class="results-header">
-          <h2 id="results-title">Results</h2>
-          <span id="results-meta" class="meta"></span>
-        </div>
-        <div id="diagram-grid" class="diagram-grid"></div>
-      </section>
+      <!-- ── Tab navigation ─────────────────────────────────────────── -->
+      <nav id="tab-nav" class="tab-nav hidden" role="tablist">
+        <button class="tab-btn active" data-tab="diagrams" role="tab" aria-selected="true">
+          Diagrams &amp; Amplitude
+        </button>
+        <button class="tab-btn" data-tab="distributions" role="tab" aria-selected="false">
+          Distributions
+        </button>
+      </nav>
 
-      <section id="amplitude-section" class="amplitude-panel hidden">
-        <h3>Scattering Amplitude |M|²</h3>
-        <div id="amplitude-formula" class="amplitude-formula"></div>
-        <div id="amplitude-notes" class="amplitude-notes"></div>
-      </section>
+      <!-- ── Tab: Diagrams & Amplitude ──────────────────────────────── -->
+      <div id="tab-diagrams" class="tab-panel" role="tabpanel">
+        <section id="results-section" class="hidden">
+          <div id="process-description" class="process-description hidden"></div>
+          <div class="results-header">
+            <h2 id="results-title">Results</h2>
+            <span id="results-meta" class="meta"></span>
+          </div>
+          <div id="diagram-grid" class="diagram-grid"></div>
+        </section>
 
-      <section id="integral-section" class="integral-panel hidden">
-        <h3>Amplitude Integral  <span class="integral-subtitle">i𝓜</span></h3>
-        <div id="integral-formula" class="integral-formula"></div>
-        <div id="integral-notes" class="integral-notes"></div>
-      </section>
+        <section id="amplitude-section" class="amplitude-panel hidden">
+          <h3>Scattering Amplitude |M|²</h3>
+          <div id="amplitude-formula" class="amplitude-formula"></div>
+          <div id="amplitude-notes" class="amplitude-notes"></div>
+        </section>
+
+        <section id="integral-section" class="integral-panel hidden">
+          <h3>Amplitude Integral  <span class="integral-subtitle">i𝓜</span></h3>
+          <div id="integral-formula" class="integral-formula"></div>
+          <div id="integral-notes" class="integral-notes"></div>
+        </section>
+      </div>
+
+      <!-- ── Tab: Differential Distributions ────────────────────────── -->
+      <div id="tab-distributions" class="tab-panel hidden" role="tabpanel">
+        <section id="differential-section" class="amplitude-panel">
+          <div class="distrib-header">
+            <h3>Differential cross-section dσ/dX</h3>
+            <p class="histogram-note">
+              Histogram any kinematic distribution for the current process.
+              <strong>2→2 cos θ</strong> uses deterministic scipy.quad per bin.
+              <strong>2→N and pp</strong> processes use Monte Carlo, with
+              optional NLO running-coupling rescaling.  Bin axis ranges are
+              automatically chosen for the selected observable.
+            </p>
+          </div>
+          <div class="hist-controls">
+            <label>Observable
+              <select id="obs-select">
+                <option value="cos_theta">cos θ (2→2)</option>
+                <option value="pT_lepton">pT of leading lepton (GeV)</option>
+                <option value="pT_photon">pT of leading photon (GeV)</option>
+                <option value="eta_lepton">η of leading lepton</option>
+                <option value="y_lepton">y of leading lepton</option>
+                <option value="M_inv">M_inv of final state (GeV)</option>
+                <option value="M_ll">M_ll dilepton (GeV)</option>
+                <option value="DR_ll">ΔR_ll</option>
+              </select>
+            </label>
+            <label>√s (GeV)
+              <input type="number" id="hist-sqrts" value="91" step="1" min="1" />
+            </label>
+            <label>X min
+              <input type="number" id="hist-xmin" value="-1" step="0.1" />
+            </label>
+            <label>X max
+              <input type="number" id="hist-xmax" value="1" step="0.1" />
+            </label>
+            <label>bins
+              <input type="number" id="hist-nbins" value="20" min="2" max="100" />
+            </label>
+            <label>order
+              <select id="hist-order">
+                <option value="LO" selected>LO</option>
+                <option value="NLO-running">NLO (running coupling)</option>
+                <option value="NLO-subtracted">NLO (CS subtraction, e+e-→μμ only)</option>
+              </select>
+            </label>
+            <label>n_events (MC)
+              <input type="number" id="hist-nevents" value="50000" min="1000" max="500000" step="10000" />
+            </label>
+            <button id="hist-compute-btn" class="btn-primary">Compute distribution</button>
+          </div>
+          <div id="hist-status" class="hist-status"></div>
+          <div id="hist-canvas-wrap" class="hist-canvas-wrap hidden">
+            <svg id="hist-svg" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="hist-summary" class="hist-summary"></div>
+          </div>
+        </section>
+      </div>
 
       <div id="loading" class="loading hidden">
         <div class="spinner"></div>

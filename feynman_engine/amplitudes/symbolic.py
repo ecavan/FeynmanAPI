@@ -792,10 +792,54 @@ def _mediator_kind(particle: Particle) -> str | None:
     return None
 
 
+from fractions import Fraction as _Fraction
+
+# Electric charge magnitude (in units of |e|) by particle name.  Used to
+# inject the Q_f factor into photon-fermion vertices.  Antiparticles share
+# the same magnitude (|Q_f|); the sign of the charge is handled by the
+# spinor conventions, and |M|² depends only on |Q_f|^n.
+_FERMION_CHARGE_MAGNITUDE: dict[str, _Fraction] = {
+    # charged leptons
+    "e+": _Fraction(1), "e-": _Fraction(1),
+    "mu+": _Fraction(1), "mu-": _Fraction(1),
+    "tau+": _Fraction(1), "tau-": _Fraction(1),
+    # neutrinos (no electric charge — won't reach the photon vertex anyway)
+    "nu_e": _Fraction(0), "nu_e~": _Fraction(0),
+    "nu_mu": _Fraction(0), "nu_mu~": _Fraction(0),
+    "nu_tau": _Fraction(0), "nu_tau~": _Fraction(0),
+    # up-type quarks (|Q| = 2/3)
+    "u": _Fraction(2, 3), "u~": _Fraction(2, 3),
+    "c": _Fraction(2, 3), "c~": _Fraction(2, 3),
+    "t": _Fraction(2, 3), "t~": _Fraction(2, 3),
+    # down-type quarks (|Q| = 1/3)
+    "d": _Fraction(1, 3), "d~": _Fraction(1, 3),
+    "s": _Fraction(1, 3), "s~": _Fraction(1, 3),
+    "b": _Fraction(1, 3), "b~": _Fraction(1, 3),
+}
+
+
+def _fermion_charge_magnitude(particle_name: str) -> _Fraction:
+    """Return |Q_f| in units of |e| for a fermion at a photon vertex."""
+    if particle_name in _FERMION_CHARGE_MAGNITUDE:
+        return _FERMION_CHARGE_MAGNITUDE[particle_name]
+    # Unknown fermion → assume unit charge (matches old behaviour).  This is
+    # safe for QED (electrons) and falls back to the prior convention rather
+    # than silently dropping a coupling.
+    return _Fraction(1)
+
+
 def _coupling_symbol(theory: str, mediator_name: str, edges: list[Edge]):
     species = _species_key(edges[0].particle)
     if mediator_name == "gamma":
-        return Symbol("e")
+        # Photon couples as -i Q_f e γ^μ.  The fermion's electric charge
+        # magnitude must be carried explicitly; otherwise pure-quark γ
+        # processes (e.g. u u~ → γγ in QCDQED) lose their Q_f^n factor and
+        # all flavours come out indistinguishable.  Sign is absorbed into
+        # the spinor/Dirac conventions; |M|² depends only on |Q_f|^n.
+        q_mag = _fermion_charge_magnitude(edges[0].particle)
+        if q_mag == 1:
+            return Symbol("e")
+        return Rational(q_mag.numerator, q_mag.denominator) * Symbol("e")
     if mediator_name == "g":
         return Symbol("g_s")
     if mediator_name == "Z":

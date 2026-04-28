@@ -41,7 +41,51 @@ def _build_coupling_defaults(theory: str) -> dict[str, float]:
 
     Mass symbols (m_e, m_mu, …) are substituted with the particle mass in GeV,
     NOT mass-squared.  SymPy expressions use ``m_e**2`` when they mean m².
+
+    Includes species-specific Z-fermion couplings (``g_Z_e``, ``g_Z_mu``,
+    ``g_Z_u``, …) and Yukawa couplings (``y_e``, ``y_b``, …) used by the
+    form-symbolic EW backend.  The ``g_Z_X`` values are EFFECTIVE couplings
+    ``(g_Z/2) × √(cV_X² + cA_X²)`` that would reproduce the spin-averaged
+    |M|² if Z were a pure vector boson with that single coupling — the
+    backend's V-A structure approximation.
     """
+    # Electroweak parameters (PDG 2023 values).
+    _SIN2_THETA_W = 0.23122
+    _COS2_THETA_W = 1.0 - _SIN2_THETA_W
+    _G_W = _E_EM / math.sqrt(_SIN2_THETA_W)
+    _G_Z = _E_EM / math.sqrt(_SIN2_THETA_W * _COS2_THETA_W)
+    _VEV = 246.21965  # Higgs VEV in GeV
+
+    def _g_Z_fermion(T3: float, Q: float) -> float:
+        """Effective Z-fermion coupling magnitude in V-A vector-only approximation."""
+        cV = T3 - 2.0 * Q * _SIN2_THETA_W
+        cA = T3
+        return _G_Z * 0.5 * math.sqrt(cV * cV + cA * cA)
+
+    # T3 and Q for each fermion (T3 = ±1/2, Q in units of |e|).
+    _FERMIONS = {
+        # Charged leptons: T3=-1/2, Q=-1
+        "e":   (-0.5, -1.0),
+        "mu":  (-0.5, -1.0),
+        "tau": (-0.5, -1.0),
+        # Neutrinos: T3=+1/2, Q=0
+        "nu_e":   (+0.5, 0.0),
+        "nu_mu":  (+0.5, 0.0),
+        "nu_tau": (+0.5, 0.0),
+        # Up-type quarks: T3=+1/2, Q=+2/3
+        "u": (+0.5, +2.0/3),
+        "c": (+0.5, +2.0/3),
+        "t": (+0.5, +2.0/3),
+        # Down-type quarks: T3=-1/2, Q=-1/3
+        "d": (-0.5, -1.0/3),
+        "s": (-0.5, -1.0/3),
+        "b": (-0.5, -1.0/3),
+    }
+
+    _G_F = 1.1663787e-5  # Fermi constant in GeV⁻²
+    _N_C = 3             # SU(3) colour quanta (kept here so curated amplitudes
+                          # using N_c symbolically can substitute it).
+
     defaults: dict[str, float] = {
         "alpha":   ALPHA_EM,
         "alpha_s": ALPHA_S,
@@ -49,14 +93,85 @@ def _build_coupling_defaults(theory: str) -> dict[str, float]:
         "e_em":    _E_EM,
         "g_s":     _G_S,
         "g":       _G_S,
+        # Electroweak couplings — used by curated EW amplitudes (qq̄→ZH, e+e-→ZZ, …).
+        "g_W":     _G_W,
+        "g_Z":     _G_Z,
+        "sin2_W":  _SIN2_THETA_W,
+        "cos2_W":  _COS2_THETA_W,
+        "sin_W":   math.sqrt(_SIN2_THETA_W),
+        "cos_W":   math.sqrt(_COS2_THETA_W),
+        "v":       _VEV,
+        "VEV":     _VEV,
+        # Fermi constant for low-energy effective theory (muon decay etc.)
+        "G_F":     _G_F,
+        # Colour quanta in symbolic templates
+        "N_c":     _N_C,
     }
+    # Species-specific Z couplings: g_Z_<fermion> = (g_Z/2) × √(cV² + cA²)
+    for fermion, (T3, Q) in _FERMIONS.items():
+        defaults[f"g_Z_{fermion}"] = _g_Z_fermion(T3, Q)
+    # Yukawa couplings: y_f = m_f / v
+    for fermion in _FERMIONS:
+        m_key = f"m_{fermion}"
+        if m_key in _MASS_GEV:
+            defaults[f"y_{fermion}"] = _MASS_GEV[m_key] / _VEV
+    # W-quark coupling generic (CKM ~ I): g_W_<f1>_<f2> = g_W × |V_{f1 f2}|
+    # For diagonal CKM, g_W_q1bar_q2 = g_W when q1, q2 are the same family.
+    # Off-diagonal (Cabibbo) ~ 0.225; we use diagonal=1 here for simplicity.
+    for q1 in ("u", "c", "t"):
+        for q2 in ("d", "s", "b"):
+            same_gen = (q1, q2) in (("u", "d"), ("c", "s"), ("t", "b"))
+            ckm = 1.0 if same_gen else 0.0
+            defaults[f"g_W_p_{q1}_{q2}bar"] = _G_W * ckm
+            defaults[f"g_W_m_{q1}bar_{q2}"] = _G_W * ckm
+
     defaults.update(_MASS_GEV)
+    # Also add FORM-safe mass names (no underscores) so that symbols
+    # from FORM trace outputs (e.g. "mmu" from m_mu) are substituted.
+    for key, val in list(_MASS_GEV.items()):
+        form_key = key.replace("_", "")
+        if form_key != key and form_key not in defaults:
+            defaults[form_key] = val
     return defaults
 
 
 def _kallen(a: float, b: float, c: float) -> float:
     """Källén triangle function λ(a, b, c) = a² + b² + c² − 2(ab + ac + bc)."""
     return a * a + b * b + c * c - 2.0 * (a * b + a * c + b * c)
+
+
+def _identical_particle_symmetry_factor(outgoing: list[str]) -> int:
+    """Return ∏ (n_i!) over groups of identical outgoing particles.
+
+    For physical observables, integrating over the full phase space
+    double-counts configurations of identical particles.  Each group of
+    n identical particles contributes a factor of 1/n! to σ.  Examples:
+        ['mu+', 'mu-']        → 1   (distinguishable)
+        ['gamma', 'gamma']    → 2   (2 identical photons)
+        ['Z', 'Z']            → 2
+        ['g', 'g', 'g']       → 6
+        ['u', 'u~']           → 1   (particle + antiparticle distinguishable)
+
+    Convention follows P&S eq. 5.107: |M̄|² is spin-averaged but does not
+    include the 1/n! symmetry factor; the σ formula does.
+    """
+    from collections import Counter
+    counts = Counter(outgoing)
+    factor = 1
+    for n in counts.values():
+        if n > 1:
+            factor *= math.factorial(n)
+    return factor
+
+
+def _get_outgoing_particles(process: str, theory: str) -> list[str]:
+    """Parse outgoing particle list from a process string."""
+    from feynman_engine.physics.translator import parse_process
+    try:
+        spec = parse_process(process.strip(), theory.upper())
+        return list(spec.outgoing)
+    except Exception:
+        return []
 
 
 def _get_particle_masses(process: str, theory: str) -> tuple[float, float, float, float]:
@@ -137,15 +252,6 @@ def _validate_cross_section_scope(process: str, theory: str):
             "supported": False,
         }
 
-    if getattr(result, "approximation_level", "") == "approximate-pointwise":
-        return None, {
-            "error": (
-                "Only a representative-point |M|^2 proxy is available for this process, "
-                "so a differential cross section cannot be integrated reliably yet."
-            ),
-            "supported": False,
-        }
-
     return result, None
 
 
@@ -217,6 +323,20 @@ def _msq_to_callable(
         expr = expr.subs(t_sym_in_expr, t_sub)
     if u_sym_in_expr is not None:
         expr = expr.subs(u_sym_in_expr, u_sub)
+
+    # After substitution + t/u replacement, the only free symbols left
+    # SHOULD be s_sym and cos_sym. Anything else is a coupling or mass we
+    # forgot to register — historically this caused silent σ=0 bugs because
+    # the lambdified function returned a sympy expression that float() failed
+    # on, then got swallowed by the integrator's try/except.  Fail loudly.
+    leftover = {sym.name for sym in expr.free_symbols} - {s_sym.name, cos_sym.name}
+    if leftover:
+        raise ValueError(
+            f"Unbound symbols in |M|² after substitution: {sorted(leftover)}. "
+            f"This will produce wrong cross-sections.  Add these to "
+            f"_build_coupling_defaults() in cross_section.py, or use a "
+            f"curated amplitude that doesn't introduce them."
+        )
 
     return lambdify([s_sym, cos_sym], expr, modules="numpy")
 
@@ -398,12 +518,19 @@ def total_cross_section(
         sigma_gev2, err_gev2 = 0.0, float("nan")
         converged = False
 
-    sigma_pb = max(sigma_gev2, 0.0) * GEV2_TO_PB
-    err_pb   = abs(err_gev2) * GEV2_TO_PB
+    # Identical-particle symmetry factor (1/n!) for the final state.
+    # P&S eq. 5.107 convention: |M̄|² has spin averaging but no symmetry
+    # factor; the σ formula includes 1/n_identical! to avoid double-counting
+    # configurations of indistinguishable particles.
+    outgoing = _get_outgoing_particles(process, theory)
+    sym_factor = _identical_particle_symmetry_factor(outgoing)
 
-    # dσ/d(cosθ) at cosθ = 0
+    sigma_pb = max(sigma_gev2, 0.0) * GEV2_TO_PB / sym_factor
+    err_pb   = abs(err_gev2) * GEV2_TO_PB / sym_factor
+
+    # dσ/d(cosθ) at cosθ = 0  (also gets the symmetry factor)
     try:
-        dsigma_cos0 = float(integrand(0.0)) * GEV2_TO_PB
+        dsigma_cos0 = float(integrand(0.0)) * GEV2_TO_PB / sym_factor
     except Exception:
         dsigma_cos0 = None
 
@@ -434,6 +561,7 @@ def total_cross_section(
         "formula_latex":         formula_latex,
         "massive_kinematics":    is_massive,
         "masses_gev":            list(masses),
+        "identical_particle_factor": sym_factor,
         "supported":             True,
     }
 
@@ -589,8 +717,11 @@ def total_cross_section_mc(
     sigma_gev2 = float(np.mean(integrand))
     sigma_err_gev2 = float(np.std(integrand) / np.sqrt(n_events))
 
-    sigma_pb = sigma_gev2 * _GEV2_PB
-    sigma_err_pb = sigma_err_gev2 * _GEV2_PB
+    # Identical-particle symmetry factor (P&S eq 5.107 convention).
+    sym_factor = _identical_particle_symmetry_factor(list(spec.outgoing))
+
+    sigma_pb = sigma_gev2 * _GEV2_PB / sym_factor
+    sigma_err_pb = sigma_err_gev2 * _GEV2_PB / sym_factor
 
     n_passed = int(np.sum(cut_weights > 0)) if min_invariant_mass > 0.0 else n_events
 
@@ -601,6 +732,7 @@ def total_cross_section_mc(
         "s_gev2": s_val,
         "sigma_pb": sigma_pb,
         "sigma_uncertainty_pb": sigma_err_pb,
+        "identical_particle_factor": sym_factor,
         "n_events": n_events,
         "n_passed_cut": n_passed,
         "min_invariant_mass_gev": min_invariant_mass,

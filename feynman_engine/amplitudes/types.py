@@ -1,7 +1,7 @@
 """Shared amplitude result types."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 try:
@@ -9,6 +9,31 @@ try:
     _SYMPY_AVAILABLE = True
 except ImportError:  # pragma: no cover - dependency is required in normal operation
     _SYMPY_AVAILABLE = False
+
+
+# Capability flags — what *can* a downstream consumer trust this amplitude for?
+# All surviving backends (curated formulas, FORM traces, SymPy symbolic, and
+# LoopTools-numerical loop amplitudes) produce real |M|²(s,t,u,...) functions
+# that can be integrated over phase space.  The single-point "approximate-
+# pointwise" backend was removed — its outputs were not safe to integrate.
+_FEATURES_BY_LEVEL: dict[str, dict[str, bool]] = {
+    "exact-symbolic": {
+        "is_function_of_kinematics": True,
+        "cross_section_integration":  True,
+        "differential_distribution":  True,
+        "monte_carlo":                True,
+        "nlo_running_kfactor":        True,
+        "trustworthy_value":          True,
+    },
+    "looptools-numerical": {
+        "is_function_of_kinematics": True,
+        "cross_section_integration":  True,
+        "differential_distribution":  True,
+        "monte_carlo":                True,
+        "nlo_running_kfactor":        True,
+        "trustworthy_value":          True,
+    },
+}
 
 
 @dataclass
@@ -23,6 +48,41 @@ class AmplitudeResult:
     backend: str = "unknown"
     approximation_level: str = "exact-symbolic"
     evaluation_point: dict | None = None
+
+    @property
+    def is_symbolic_function(self) -> bool:
+        """True for every surviving backend — kept for backwards compatibility."""
+        return True
+
+    @property
+    def features(self) -> dict[str, bool]:
+        """What this amplitude can be used for.  See _FEATURES_BY_LEVEL above."""
+        return dict(_FEATURES_BY_LEVEL.get(
+            self.approximation_level,
+            _FEATURES_BY_LEVEL["exact-symbolic"],
+        ))
+
+    @property
+    def trustworthy_for_cross_section(self) -> bool:
+        """One-line check used by σ integrators to refuse unsafe inputs."""
+        return self.features["cross_section_integration"]
+
+    def to_api_dict(self) -> dict:
+        """Convert to a dict suitable for API/frontend consumption."""
+        return {
+            "process": self.process,
+            "theory": self.theory,
+            "description": self.description,
+            "notes": self.notes,
+            "backend": self.backend,
+            "approximation_level": self.approximation_level,
+            "evaluation_point": self.evaluation_point,
+            "features": self.features,
+            "is_symbolic_function": True,
+            "msq": self.msq,
+            "msq_latex": self.msq_latex,
+            "integral_latex": self.integral_latex,
+        }
 
     def msq_at(
         self,

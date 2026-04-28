@@ -77,7 +77,38 @@ else
   fi
 fi
 
-# 6. Verify Python packages
+# 6. LHAPDF (optional but recommended for hadron-collider physics)
+# Skip when SKIP_LHAPDF=1 (e.g. fast iteration without internet).
+echo ""
+echo "--- LHAPDF (PDFs for pp processes) ---"
+if [ -n "$SKIP_LHAPDF" ]; then
+  echo "Skipped (SKIP_LHAPDF set)."
+elif python -c "import lhapdf" 2>/dev/null; then
+  echo "✓ LHAPDF Python bindings already importable"
+elif python -c "
+import sys
+sys.path.insert(0, '/tmp/lhapdf-install/lib/python3.14/site-packages')
+sys.path.insert(0, '/tmp/lhapdf-install/lib/python3.13/site-packages')
+sys.path.insert(0, '/tmp/lhapdf-install/lib/python3.12/site-packages')
+sys.path.insert(0, '/tmp/lhapdf-install/lib/python3.11/site-packages')
+import lhapdf
+" 2>/dev/null; then
+  echo "✓ LHAPDF found at /tmp/lhapdf-install (auto-discovered by feynman_engine)"
+else
+  echo "LHAPDF not installed. Building from bundled source archive..."
+  echo "(This compiles a C++ library — takes a couple of minutes.)"
+  if python -m feynman_engine install-lhapdf; then
+    echo "✓ Built LHAPDF + installed default CT18LO PDF set"
+    echo "  → pp processes now use percent-level-accurate PDFs"
+  else
+    echo "⚠ Unable to build LHAPDF automatically."
+    echo "  pp processes will use the built-in LO-simple PDF (factor-of-2-3 accuracy)."
+    echo "  Ensure a C++ compiler (g++/clang++), make, and Python headers are installed."
+    echo "  Re-run later with: python -m feynman_engine install-lhapdf"
+  fi
+fi
+
+# 7. Verify Python packages
 echo ""
 echo "--- Python packages ---"
 python -c "import networkx; print('✓ networkx', networkx.__version__)"
@@ -87,6 +118,9 @@ python -c "import jinja2; print('✓ jinja2', jinja2.__version__)"
 
 echo ""
 echo "=== Setup complete ==="
+echo ""
+echo "Verify everything with:"
+echo "  python -m feynman_engine doctor"
 echo ""
 echo "To start the server:"
 echo "  source .venv/bin/activate"

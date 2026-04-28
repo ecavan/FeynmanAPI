@@ -981,19 +981,14 @@ def pv_reduce(diagram: Diagram, theory: str) -> Optional[PVExpansion]:
 
 def get_loop_amplitude(process: str, theory: str = "QED",
                        loops: int = 1) -> Optional[AmplitudeResult]:
-    """PV-reduce and numerically evaluate 1-loop diagrams for ``process``.
+    """PV-reduce 1-loop diagrams for ``process`` and return the first as a
+    symbolic AmplitudeResult (in terms of A₀/B₀/C₀/D₀ scalar integrals).
 
-    All 1-loop diagrams are PV-reduced; the first is returned as the
-    representative AmplitudeResult (with correct topology + coefficients).
-
-    If LoopTools is available, ``msq`` in the result is populated with the
-    numerical complex value of the leading scalar integral.
+    For numerical evaluation, use the /amplitude/loop-pv endpoint or call
+    ``_evaluate_expansion_at()`` directly with explicit kinematics.
     """
     from feynman_engine.core.generator import generate_diagrams
     from feynman_engine.physics.translator import parse_process
-    from feynman_engine.amplitudes.looptools_bridge import (
-        is_available as lt_avail, evaluate_pv_expansion,
-    )
 
     theory = theory.upper()
     spec = parse_process(process.strip(), theory=theory, loops=loops)
@@ -1012,42 +1007,14 @@ def get_loop_amplitude(process: str, theory: str = "QED",
     if not expansions:
         return None
 
-    # Build the representative AmplitudeResult from the first expansion.
+    # Return the symbolic PV-reduced expansion — exact as a function of
+    # kinematic invariants (A₀/B₀/C₀/D₀ symbols).  Numerical evaluation at a
+    # representative point used to be wrapped here as the result, but that
+    # produced a single number that wasn't safe to feed into σ integration;
+    # the /amplitude/loop-pv endpoint exposes the decomposition for users
+    # who want to evaluate it themselves.
     first = expansions[0]
-    result = first.amplitude_result(theory)
-
-    # Attempt numerical evaluation via LoopTools.
-    if lt_avail():
-        from feynman_engine.amplitudes.looptools_bridge import B0, C0, D0, A0
-        # Use a kinematic point: s=10 GeV², t=-3, u=-7 (massless external legs)
-        s_val, t_val = 10.0, -3.0
-        num_val = _evaluate_expansion_at(first, s_val=s_val, t_val=t_val)
-        if num_val is not None:
-            from sympy import Float
-            result = AmplitudeResult(
-                process=result.process,
-                theory=result.theory,
-                msq=Float(num_val.real),
-                msq_latex=result.msq_latex,
-                integral_latex=result.integral_latex,
-                description=result.description + f" [numerical at s={s_val} GeV², t={t_val} GeV²]",
-                notes=(
-                    result.notes
-                    + " | approximate-pointwise: the displayed loop |M|^2 comes from a "
-                    "single LoopTools evaluation at a representative kinematic point."
-                ),
-                backend=result.backend,
-                approximation_level="approximate-pointwise",
-                evaluation_point={
-                    "label": "representative 2->2 point used by the PV loop backend",
-                    "s_gev2": s_val,
-                    "t_gev2": t_val,
-                    "u_gev2": -(s_val + t_val),
-                    "scale_gev": abs(s_val) ** 0.5,
-                },
-            )
-
-    return result
+    return first.amplitude_result(theory)
 
 
 def get_loop_pv_decomposition(

@@ -325,53 +325,46 @@ def test_looptools_packaging():
 
 # ── New curated amplitudes ────────────────────────────────────────────────────
 
+def _subs_by_name(expr, name_to_value: dict):
+    """Substitute expression symbols by name regardless of sympy assumptions
+    (real, positive, etc.) — works for any backend."""
+    subs_map = {sym: name_to_value[sym.name]
+                for sym in expr.free_symbols if sym.name in name_to_value}
+    return expr.subs(subs_map)
+
+
 def test_emu_to_emu_curated():
     """e⁻μ⁻ → e⁻μ⁻ amplitude has correct formula 2e⁴(s²+u²)/t² (massless)."""
     from feynman_engine.physics.amplitude import get_amplitude
-    from sympy import simplify, Symbol, symbols, N
 
     r = get_amplitude("e- mu- -> e- mu-", "QED")
     assert r is not None
 
-    # Substitute masses = 0 using both symbol conventions (plain and real=True)
-    # to handle either the curated or FORM backend.
-    massless = r.msq
-    for m in ["m_e", "m_mu"]:
-        massless = massless.subs(Symbol(m), 0).subs(Symbol(m, real=True), 0)
+    # Strip masses (no-op for curated, important for FORM backend).
+    massless = _subs_by_name(r.msq, {"m_e": 0, "m_mu": 0})
 
-    # Evaluate numerically at a kinematic point.
     # Known massless result: 2e⁴(s²+u²)/t²
     e_val, s_val, t_val, u_val = 2, 11, -3, -8
     expected = 2 * e_val**4 * (s_val**2 + u_val**2) / t_val**2
 
-    # Substitute all possible symbol forms.
-    result_val = massless
-    for name, val in [("e", e_val), ("s", s_val), ("t", t_val), ("u", u_val)]:
-        result_val = result_val.subs(Symbol(name), val).subs(Symbol(name, real=True), val)
-
+    result_val = _subs_by_name(massless, {
+        "e": e_val, "s": s_val, "t": t_val, "u": u_val,
+    })
     assert abs(float(result_val) - expected) < 1e-10
 
 
 def test_mumu_to_ee_curated():
     """μ⁺μ⁻ → e⁺e⁻ amplitude equals e⁺e⁻ → μ⁺μ⁻ (crossing)."""
     from feynman_engine.physics.amplitude import get_amplitude
-    from sympy import Symbol
 
     r_ee = get_amplitude("e+ e- -> mu+ mu-", "QED")
     r_mm = get_amplitude("mu+ mu- -> e+ e-", "QED")
     assert r_ee is not None and r_mm is not None
 
     # Same formula by crossing symmetry — verify at a numerical point.
-    # Substitute both plain and real=True symbols to handle any backend.
-    def _eval(msq):
-        result = msq
-        for name, val in [("e", 2), ("m_e", 0), ("m_mu", 0),
-                          ("s", 10), ("t", -3), ("u", -7)]:
-            result = result.subs(Symbol(name), val).subs(Symbol(name, real=True), val)
-        return float(result)
-
-    val_ee = _eval(r_ee.msq)
-    val_mm = _eval(r_mm.msq)
+    vals = {"e": 2, "m_e": 0, "m_mu": 0, "s": 10, "t": -3, "u": -7}
+    val_ee = float(_subs_by_name(r_ee.msq, vals))
+    val_mm = float(_subs_by_name(r_mm.msq, vals))
     assert abs(val_ee - val_mm) < 1e-10
 
 

@@ -752,10 +752,21 @@ def _particle_mass_label(theory: str, particle_name: str) -> Optional[str]:
     return None
 
 
-def _coupling_for_vertex(theory: str, mediator_name: str, fermion_name: str) -> Symbol:
-    """Return the symbolic coupling constant for a vertex."""
+def _coupling_for_vertex(theory: str, mediator_name: str, fermion_name: str):
+    """Return the symbolic coupling factor for a vertex.
+
+    For γ-fermion vertices the fermion's electric charge magnitude |Q_f| (in
+    units of |e|) is included so that pure-quark γ amplitudes carry the
+    correct Q_f^n weight.  Without this, all quark flavours would yield the
+    same partonic σ̂(qq̄→γγ) and a hadronic convolution over flavours would
+    badly overestimate the cross-section.
+    """
     if mediator_name == "gamma":
-        return Symbol("e")
+        from feynman_engine.amplitudes.symbolic import _fermion_charge_magnitude
+        q = _fermion_charge_magnitude(fermion_name)
+        if q == 1:
+            return Symbol("e")
+        return Rational(q.numerator, q.denominator) * Symbol("e")
     if mediator_name == "g":
         return Symbol("g_s")
     if mediator_name == "Z":
@@ -2282,83 +2293,172 @@ def _gg_to_gg_form(spec, tree_diagrams, theory):
 # Photon polarization sum (-g_{ρρ'}) is included in the FORM expressions.
 # ══════════════════════════════════════════════════════════════════════════════
 
-_EEMM_GAMMA_FORM_PROGRAM = r"""#-
+def _build_2to3_form_program(m_in_form: str = "", m_out_form: str = "") -> str:
+    """Build the FORM program for ff̄→f'f̄'γ bremsstrahlung.
+
+    Parameters
+    ----------
+    m_in_form : str
+        FORM-safe mass symbol for initial-state fermion (e.g. "me").
+        Empty string for massless.
+    m_out_form : str
+        FORM-safe mass symbol for final-state fermion (e.g. "mmu").
+        Empty string for massless.
+
+    Returns the complete FORM program as a string.
+    """
+    mi = m_in_form   # initial-state mass label (or "")
+    mo = m_out_form   # final-state mass label (or "")
+
+    # --- helpers for FORM expressions ---
+    def ferm(L, mom, mass):
+        """External fermion spin sum: /p + m."""
+        s = f"g_({L},{mom})"
+        return f"({s}+{mass}*gi_({L}))" if mass else s
+
+    def anti(L, mom, mass):
+        """External antifermion spin sum: /p - m."""
+        s = f"g_({L},{mom})"
+        return f"({s}-{mass}*gi_({L}))" if mass else s
+
+    def prop_sum(L, moms, mass):
+        """Internal propagator numerator: Σ /p_i + m."""
+        parts = "+".join(f"g_({L},{m})" for m in moms)
+        core = parts if len(moms) == 1 else parts
+        return f"({core}+{mass}*gi_({L}))" if mass else f"({core})"
+
+    def prop_diff(L, pos, neg, mass):
+        """Internal propagator numerator: /p_pos - /p_neg + m."""
+        core = f"g_({L},{pos})-g_({L},{neg})"
+        return f"({core}+{mass}*gi_({L}))" if mass else f"({core})"
+
+    g = lambda L, idx: f"g_({L},{idx})"  # bare gamma matrix
+
+    # --- electron line pieces ---
+    # s-channel electron trace (4 gammas): used in D1, D2 amplitudes
+    # Tr[(/p1+m_in) γ^α (/p2-m_in) γ^{α'}]
+    el_s = f"{ferm(1,'p1',mi)}*{g(1,'al')}*{anti(1,'p2',mi)}*{g(1,'alp')}"
+
+    # ISR e- propagator trace pieces (6 gammas): used in D3
+    # From amplitude: (/p1+m_in) γ^ρ (/p1-/q3+m_in) γ^β
+    # From conjugate: (/p2-m_in) γ^{β'} (/p1-/q3+m_in) γ^{ρ'}
+    el_d3_amp = f"{ferm(1,'p1',mi)}*{g(1,'rho')}*{prop_diff(1,'p1','q3',mi)}*{g(1,'be')}"
+    el_d3_conj = f"{anti(1,'p2',mi)}*{g(1,'bep')}*{prop_diff(1,'p1','q3',mi)}*{g(1,'rhop')}"
+
+    # ISR e+ propagator trace pieces (6 gammas): used in D4
+    # From amplitude: (/p1+m_in) γ^β (/p2-/q3+m_in) γ^ρ
+    # From conjugate: (/p2-m_in) γ^{ρ'} (/p2-/q3+m_in) γ^{β'}
+    el_d4_amp = f"{ferm(1,'p1',mi)}*{g(1,'be')}*{prop_diff(1,'p2','q3',mi)}*{g(1,'rho')}"
+    el_d4_conj = f"{anti(1,'p2',mi)}*{g(1,'rhop')}*{prop_diff(1,'p2','q3',mi)}*{g(1,'bep')}"
+
+    # --- muon line pieces ---
+    # s-channel muon trace (4 gammas): used in D3, D4 amplitudes
+    # Tr[(/q1+m_out) γ^β (/q2-m_out) γ^{β'}]
+    mu_s = f"{ferm(2,'q1',mo)}*{g(2,'be')}*{anti(2,'q2',mo)}*{g(2,'bep')}"
+
+    # FSR μ- propagator trace pieces (8 gammas): used in D1
+    # From amplitude: (/q1+m_out) γ^ρ (/q1+/q3+m_out) γ^α
+    # From conjugate: (/q2-m_out) γ^{α'} (/q1+/q3+m_out) γ^{ρ'}
+    mu_d1_amp = f"{ferm(2,'q1',mo)}*{g(2,'rho')}*{prop_sum(2,['q1','q3'],mo)}*{g(2,'al')}"
+    mu_d1_conj = f"{anti(2,'q2',mo)}*{g(2,'alp')}*{prop_sum(2,['q1','q3'],mo)}*{g(2,'rhop')}"
+
+    # FSR μ+ propagator trace pieces (8 gammas): used in D2
+    # From amplitude: (/q1+m_out) γ^α (/q2+/q3+m_out) γ^ρ
+    # From conjugate: (/q2-m_out) γ^{ρ'} (/q2+/q3+m_out) γ^{α'}
+    mu_d2_amp = f"{ferm(2,'q1',mo)}*{g(2,'al')}*{prop_sum(2,['q2','q3'],mo)}*{g(2,'rho')}"
+    mu_d2_conj = f"{anti(2,'q2',mo)}*{g(2,'rhop')}*{prop_sum(2,['q2','q3'],mo)}*{g(2,'alp')}"
+
+    # --- FSR×ISR cross muon lines (6 gammas) ---
+    # D1 amplitude muon part + D3/D4 conjugate muon part:
+    # D1 amp:  (/q1+m) γ^ρ (/q1+/q3+m) γ^α
+    # D3 conj muon: (/q2-m) γ^{β'}   (just the simple vertex)
+    mu_d1xd3 = f"{ferm(2,'q1',mo)}*{g(2,'rho')}*{prop_sum(2,['q1','q3'],mo)}*{g(2,'al')}*{anti(2,'q2',mo)}*{g(2,'bep')}"
+
+    # D2 amp:  (/q1+m) γ^α (/q2+/q3+m) γ^ρ
+    # D3 conj muon: (/q2-m) γ^{β'}
+    mu_d2xd3 = f"{ferm(2,'q1',mo)}*{g(2,'al')}*{prop_sum(2,['q2','q3'],mo)}*{g(2,'rho')}*{anti(2,'q2',mo)}*{g(2,'bep')}"
+
+    # FSR×ISR electron cross lines (6 gammas):
+    # D1 amp electron: (/p1+m_in) γ^α  ×  D3 conj electron: (/p2-m_in) γ^{β'} (/p1-/q3+m_in) γ^{ρ'}
+    el_d1xd3 = f"{ferm(1,'p1',mi)}*{g(1,'al')}*{anti(1,'p2',mi)}*{g(1,'bep')}*{prop_diff(1,'p1','q3',mi)}*{g(1,'rhop')}"
+
+    # D1 amp electron × D4 conj electron: (/p2-m_in) γ^{ρ'} (/p2-/q3+m_in) γ^{β'}
+    el_d1xd4 = f"{ferm(1,'p1',mi)}*{g(1,'al')}*{anti(1,'p2',mi)}*{g(1,'rhop')}*{prop_diff(1,'p2','q3',mi)}*{g(1,'bep')}"
+
+    # --- build on-shell conditions ---
+    onshell = []
+    onshell.append(f"id p1.p1 = {mi+'^2' if mi else '0'};")
+    onshell.append(f"id p2.p2 = {mi+'^2' if mi else '0'};")
+    onshell.append(f"id q1.q1 = {mo+'^2' if mo else '0'};")
+    onshell.append(f"id q2.q2 = {mo+'^2' if mo else '0'};")
+    onshell.append("id q3.q3 = 0;")
+
+    # --- symbol declarations ---
+    sym_decl = ""
+    mass_syms = {s for s in (mi, mo) if s}
+    if mass_syms:
+        sym_decl = f"Symbol {','.join(sorted(mass_syms))};\n"
+
+    # --- assemble the FORM program ---
+    program = f"""#-
 Off Statistics;
 Vectors p1,p2,q1,q2,q3;
 Indices al,alp,be,bep,rho,rhop;
-
-* ─── FSR×FSR group ───────────────────────────────────────────
-
-* D11: |D1|^2 — FSR from mu+ squared
+{sym_decl}
+* FSR x FSR group
 Local D11 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,alp)
-  *g_(2,q1)*g_(2,rho)*(g_(2,q1)+g_(2,q3))*g_(2,al)
-  *g_(2,q2)*g_(2,alp)*(g_(2,q1)+g_(2,q3))*g_(2,rhop);
+  *{el_s}
+  *{mu_d1_amp}
+  *{mu_d1_conj};
 
-* D22: |D2|^2 — FSR from mu- squared
 Local D22 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,alp)
-  *g_(2,q1)*g_(2,al)*(g_(2,q2)+g_(2,q3))*g_(2,rho)
-  *g_(2,q2)*g_(2,rhop)*(g_(2,q2)+g_(2,q3))*g_(2,alp);
+  *{el_s}
+  *{mu_d2_amp}
+  *{mu_d2_conj};
 
-* D12: D1×D2* cross — FSR×FSR interference
 Local D12 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,alp)
-  *g_(2,q1)*g_(2,rho)*(g_(2,q1)+g_(2,q3))*g_(2,al)
-  *g_(2,q2)*g_(2,rhop)*(g_(2,q2)+g_(2,q3))*g_(2,alp);
+  *{el_s}
+  *{mu_d1_amp}
+  *{mu_d2_conj};
 
-* ─── ISR×ISR group ───────────────────────────────────────────
-
-* D33: |D3|^2 — ISR from e+ squared
+* ISR x ISR group
 Local D33 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,rho)*(g_(1,p1)-g_(1,q3))*g_(1,be)
-  *g_(1,p2)*g_(1,bep)*(g_(1,p1)-g_(1,q3))*g_(1,rhop)
-  *g_(2,q1)*g_(2,be)*g_(2,q2)*g_(2,bep);
+  *{el_d3_amp}
+  *{el_d3_conj}
+  *{mu_s};
 
-* D44: |D4|^2 — ISR from e- squared
 Local D44 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,be)*(g_(1,p2)-g_(1,q3))*g_(1,rho)
-  *g_(1,p2)*g_(1,rhop)*(g_(1,p2)-g_(1,q3))*g_(1,bep)
-  *g_(2,q1)*g_(2,be)*g_(2,q2)*g_(2,bep);
+  *{el_d4_amp}
+  *{el_d4_conj}
+  *{mu_s};
 
-* D34: D3×D4* cross — ISR×ISR interference
 Local D34 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,rho)*(g_(1,p1)-g_(1,q3))*g_(1,be)
-  *g_(1,p2)*g_(1,rhop)*(g_(1,p2)-g_(1,q3))*g_(1,bep)
-  *g_(2,q1)*g_(2,be)*g_(2,q2)*g_(2,bep);
+  *{el_d3_amp}
+  *{el_d4_conj}
+  *{mu_s};
 
-* ─── FSR×ISR cross group ─────────────────────────────────────
-
-* D13: D1×D3* — FSR(mu+) × ISR(e+)
+* FSR x ISR cross group
 Local D13 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,bep)*(g_(1,p1)-g_(1,q3))*g_(1,rhop)
-  *g_(2,q1)*g_(2,rho)*(g_(2,q1)+g_(2,q3))*g_(2,al)*g_(2,q2)*g_(2,bep);
+  *{el_d1xd3}
+  *{mu_d1xd3};
 
-* D14: D1×D4* — FSR(mu+) × ISR(e-)
 Local D14 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,rhop)*(g_(1,p2)-g_(1,q3))*g_(1,bep)
-  *g_(2,q1)*g_(2,rho)*(g_(2,q1)+g_(2,q3))*g_(2,al)*g_(2,q2)*g_(2,bep);
+  *{el_d1xd4}
+  *{mu_d1xd3};
 
-* D23: D2×D3* — FSR(mu-) × ISR(e+)
 Local D23 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,bep)*(g_(1,p1)-g_(1,q3))*g_(1,rhop)
-  *g_(2,q1)*g_(2,al)*(g_(2,q2)+g_(2,q3))*g_(2,rho)*g_(2,q2)*g_(2,bep);
+  *{el_d1xd3}
+  *{mu_d2xd3};
 
-* D24: D2×D4* — FSR(mu-) × ISR(e-)
 Local D24 = (-d_(rho,rhop))
-  *g_(1,p1)*g_(1,al)*g_(1,p2)*g_(1,rhop)*(g_(1,p2)-g_(1,q3))*g_(1,bep)
-  *g_(2,q1)*g_(2,al)*(g_(2,q2)+g_(2,q3))*g_(2,rho)*g_(2,q2)*g_(2,bep);
+  *{el_d1xd4}
+  *{mu_d2xd3};
 
 trace4,1;
 trace4,2;
 contract;
 
-* On-shell conditions only (keep all dot products as symbols)
-id p1.p1 = 0;
-id p2.p2 = 0;
-id q1.q1 = 0;
-id q2.q2 = 0;
-id q3.q3 = 0;
+{chr(10).join(onshell)}
 
 print +s D11;
 print +s D22;
@@ -2372,6 +2472,11 @@ print +s D23;
 print +s D24;
 .end
 """
+    return program
+
+
+# Keep backward compat: the massless program is just the default
+_EEMM_GAMMA_FORM_PROGRAM = _build_2to3_form_program("", "")
 
 
 def _get_2to3_qed_amplitude(spec, theory) -> Optional[AmplitudeResult]:
@@ -2416,7 +2521,15 @@ def _get_2to3_qed_amplitude(spec, theory) -> Optional[AmplitudeResult]:
         # Same-flavor case (e.g., e+e-→e+e-γ) — not yet supported.
         return None
 
-    program = _EEMM_GAMMA_FORM_PROGRAM
+    # Detect masses from the particle registry.
+    in_ferm = [p for p in spec.incoming if p in fermions]
+    out_ferm = [p for p in spec.outgoing if p in fermions]
+    m_in_label = _particle_mass_label(theory, in_ferm[0]) if in_ferm else None
+    m_out_label = _particle_mass_label(theory, out_ferm[0]) if out_ferm else None
+    m_in_form = _to_form_name(m_in_label) if m_in_label else ""
+    m_out_form = _to_form_name(m_out_label) if m_out_label else ""
+
+    program = _build_2to3_form_program(m_in_form, m_out_form)
     raw_output = _run_form(program)
     if raw_output is None:
         return None
@@ -2440,16 +2553,24 @@ def _get_2to3_qed_amplitude(spec, theory) -> Optional[AmplitudeResult]:
     q1q3 = Symbol("q1q3", real=True)
     q2q3 = Symbol("q2q3", real=True)
 
-    # Propagator denominators (as dot-product expressions).
-    # D1: 1/(s × s₁₃) = 1/((2p1p2) × (2q1q3))
-    # D2: 1/(s × s₂₃) = 1/((2p1p2) × (2q2q3))
-    # D3: 1/(s₁₂ × t₁) = 1/((2q1q2) × (-2p1q3))
-    # D4: 1/(s₁₂ × t₂) = 1/((2q1q2) × (-2p2q3))
+    # Mass-squared symbols for propagator denominators.
+    # Use FORM-safe names (no underscores) to match the symbols in the parsed traces.
+    m_in_sq = Symbol(m_in_form, real=True, positive=True) ** 2 if m_in_form else Integer(0)
+    m_out_sq = Symbol(m_out_form, real=True, positive=True) ** 2 if m_out_form else Integer(0)
+
+    # Propagator denominators with masses:
+    # (q1+q3)² = q1² + 2q1·q3 + q3² = m_out² + 2*q1q3
+    # (q2+q3)² = m_out² + 2*q2q3
+    # (q1+q2)² = 2*m_out² + 2*q1q2
+    # (p1-q3)² = m_in² - 2*p1q3
+    # (p2-q3)² = m_in² - 2*p2q3
+    # s = (p1+p2)² = 2*m_in² + 2*p1p2
+    s_val = 2 * m_in_sq + 2 * p1p2
     denom = {
-        1: 2 * p1p2 * 2 * q1q3,         # s × s₁₃
-        2: 2 * p1p2 * 2 * q2q3,         # s × s₂₃
-        3: 2 * q1q2 * (-2 * p1q3),      # s₁₂ × t₁  (t₁ < 0)
-        4: 2 * q1q2 * (-2 * p2q3),      # s₁₂ × t₂  (t₂ < 0)
+        1: s_val * (m_out_sq + 2 * q1q3),         # s × (q1+q3)²
+        2: s_val * (m_out_sq + 2 * q2q3),         # s × (q2+q3)²
+        3: (2 * m_out_sq + 2 * q1q2) * (m_in_sq - 2 * p1q3),  # (q1+q2)² × (p1-q3)²
+        4: (2 * m_out_sq + 2 * q1q2) * (m_in_sq - 2 * p2q3),  # (q1+q2)² × (p2-q3)²
     }
 
     # Assemble: |M̄|² = (e⁶/4) Σ mult × T_ij / (denom_i × denom_j)
@@ -2470,6 +2591,7 @@ def _get_2to3_qed_amplitude(spec, theory) -> Optional[AmplitudeResult]:
 
     msq = e_sym**6 * Rational(1, 4) * msq
 
+    has_masses = bool(m_in_label or m_out_label)
     return AmplitudeResult(
         process=spec.raw,
         theory=theory,
@@ -2477,8 +2599,9 @@ def _get_2to3_qed_amplitude(spec, theory) -> Optional[AmplitudeResult]:
         msq_latex=latex(msq),
         integral_latex=None,
         description=(
-            "Tree-level 2→3 |M̄|² via FORM traces — "
-            "4 diagrams (2 FSR + 2 ISR), 10 interference terms"
+            f"Tree-level 2→3 |M̄|² via FORM traces — "
+            f"4 diagrams (2 FSR + 2 ISR), 10 interference terms"
+            f"{', massive fermions' if has_masses else ''}"
         ),
         notes=(
             "Spin-averaged (1/4). Expressed in dot products for MC evaluation. "
@@ -2529,6 +2652,12 @@ def _parse_form_2to3_output(stdout: str) -> dict[str, object]:
             for b in ("p1", "p2", "q1", "q2", "q3"):
                 sym_name = a + b
                 local_dict[sym_name] = Symbol(sym_name, real=True)
+
+        # Detect mass symbols (any bare identifiers not already covered).
+        # FORM mass symbols appear as e.g. "mmu" or "me" in the expression.
+        for token in re.findall(r'\b([a-zA-Z_]\w*)\b', expr_text):
+            if token not in local_dict and token not in ("E", "I", "pi"):
+                local_dict[token] = Symbol(token, real=True, positive=True)
 
         try:
             expr = sympify(expr_text, locals=local_dict)

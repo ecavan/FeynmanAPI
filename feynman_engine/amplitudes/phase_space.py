@@ -147,6 +147,107 @@ def rambo_massless(n_final: int, sqrt_s: float, n_events: int,
     return p, weights
 
 
+def rambo_massive(
+    n_final: int,
+    sqrt_s: float,
+    masses: list[float] | np.ndarray,
+    n_events: int,
+    rng: Optional[np.random.Generator] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate massive N-body phase space points using RAMBO.
+
+    Extends the massless RAMBO algorithm by rescaling spatial momenta so
+    that each final-state particle is on its mass shell.  See Kleiss,
+    Stirling & Ellis, Comp. Phys. Comm. 40 (1986) 359, Section 4.
+
+    Parameters
+    ----------
+    n_final : int
+        Number of final-state particles (≥ 2).
+    sqrt_s : float
+        Centre-of-mass energy in GeV.
+    masses : list or ndarray of length n_final
+        Masses in GeV for each final-state particle.
+    n_events : int
+        Number of phase space points to generate.
+    rng : numpy Generator, optional
+        Random number generator for reproducibility.
+
+    Returns
+    -------
+    momenta : ndarray, shape (n_events, n_final, 4)
+        4-momenta (E, px, py, pz) with p_i^2 = m_i^2.
+    weights : ndarray, shape (n_events,)
+        Phase space weight for each event.
+    """
+    masses = np.atleast_1d(np.asarray(masses, dtype=float))
+    if masses.shape[0] != n_final:
+        raise ValueError(f"Need {n_final} masses, got {len(masses)}")
+    sum_m = float(np.sum(masses))
+    if sum_m >= sqrt_s:
+        raise ValueError(
+            f"Sum of masses ({sum_m:.4f} GeV) >= sqrt_s ({sqrt_s:.4f} GeV)"
+        )
+
+    # If all masses are zero, delegate to the massless algorithm
+    if np.all(masses == 0.0):
+        return rambo_massless(n_final, sqrt_s, n_events, rng)
+
+    # Step 1: generate massless momenta
+    p_massless, w_massless = rambo_massless(n_final, sqrt_s, n_events, rng)
+
+    # Step 2: solve for the rescaling factor xi such that
+    #   sum_i sqrt(xi^2 * |p_i|^2 + m_i^2) = sqrt_s
+    # This is a monotone equation in xi, solved by Newton's method.
+
+    # |p_i|^2 for each particle (spatial magnitude squared)
+    p3_sq = np.sum(p_massless[:, :, 1:4] ** 2, axis=2)  # (n_events, n_final)
+
+    # Initial guess: xi = sqrt(1 - (sum_m/sqrt_s)^2)
+    xi = np.full(n_events, math.sqrt(1.0 - (sum_m / sqrt_s) ** 2))
+
+    m2 = masses ** 2  # (n_final,)
+
+    for _ in range(20):  # Newton iterations (converges in ~5)
+        # E_i(xi) = sqrt(xi^2 * |p_i|^2 + m_i^2)
+        E_i = np.sqrt(xi[:, np.newaxis] ** 2 * p3_sq + m2[np.newaxis, :])
+        f = np.sum(E_i, axis=1) - sqrt_s
+        # df/dxi = sum_i (xi * |p_i|^2 / E_i)
+        df = np.sum(xi[:, np.newaxis] * p3_sq / E_i, axis=1)
+        df = np.where(np.abs(df) < 1e-30, 1e-30, df)
+        xi_new = xi - f / df
+        xi = np.maximum(xi_new, 1e-12)  # keep positive
+        if np.all(np.abs(f) < 1e-12 * sqrt_s):
+            break
+
+    # Step 3: build massive momenta
+    #   k_i = (E_i, xi * p_i_spatial)
+    xi_4 = xi[:, np.newaxis, np.newaxis]  # (n_events, 1, 1)
+    p_massive = np.empty_like(p_massless)
+    E_i = np.sqrt(xi[:, np.newaxis] ** 2 * p3_sq + m2[np.newaxis, :])
+    p_massive[:, :, 0] = E_i
+    p_massive[:, :, 1:4] = xi_4 * p_massless[:, :, 1:4]
+
+    # Step 4: weight correction
+    # w_massive = w_massless * xi^(3n-4) * prod(|p_i|/E_i) / sum(|p_i|^2/E_i)
+    # × (sum |p_i|) / sqrt_s
+    # Following Kleiss et al. eq 4.11, the massive weight is:
+    p3_mag = np.sqrt(p3_sq)  # |p_i| for massless momenta
+    prod_p_over_E = np.prod(p3_mag / E_i, axis=1)  # prod(|p_i|/E_i)
+    sum_p3sq_over_E = np.sum(xi[:, np.newaxis] * p3_sq / E_i, axis=1)
+    sum_p3_mag = np.sum(xi[:, np.newaxis] * p3_mag, axis=1)
+
+    w_correction = (
+        xi ** (3 * n_final - 4)
+        * prod_p_over_E
+        * sum_p3_mag
+        / (sum_p3sq_over_E + 1e-300)
+    )
+    weights = w_massless * w_correction
+
+    return p_massive, weights
+
+
 def dot4(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Minkowski dot product with (+,-,-,-) signature."""
     return a[..., 0] * b[..., 0] - np.sum(a[..., 1:4] * b[..., 1:4], axis=-1)

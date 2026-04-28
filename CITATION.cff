@@ -18,6 +18,9 @@ keywords:
   - qgraf
   - form
   - looptools
+  - openloops
+  - lhapdf
+  - parton distribution functions
   - fastapi
 references:
   - type: article
@@ -111,3 +114,67 @@ references:
     year: 1986
     doi: "10.1016/0010-4655(86)90119-0"
     url: "https://doi.org/10.1016/0010-4655(86)90119-0"
+  - type: article
+    title: "OpenLoops 2"
+    authors:
+      - family-names: "Buccioni"
+        given-names: "F."
+      - family-names: "Lang"
+        given-names: "J.-N."
+      - family-names: "Lindert"
+        given-names: "J. M."
+      - family-names: "Maierhöfer"
+        given-names: "P."
+      - family-names: "Pozzorini"
+        given-names: "S."
+      - family-names: "Zhang"
+        given-names: "H."
+      - family-names: "Zoller"
+        given-names: "M. F."
+    journal: "European Physical Journal C"
+    volume: 79
+    start: 866
+    year: 2019
+    doi: "10.1140/epjc/s10052-019-7306-2"
+    url: "https://arxiv.org/abs/1907.13071"
+  - type: article
+    title: "COLLIER: a fortran-based Complex One-Loop LIbrary in Extended Regularizations"
+    authors:
+      - family-names: "Denner"
+        given-names: "A."
+      - family-names: "Dittmaier"
+        given-names: "S."
+      - family-names: "Hofer"
+        given-names: "L."
+    journal: "Computer Physics Communications"
+    volume: 212
+    start: 220
+    end: 238
+    year: 2017
+    doi: "10.1016/j.cpc.2016.10.013"
+    url: "https://doi.org/10.1016/j.cpc.2016.10.013"
+  - type: article
+    title: "LHAPDF6: parton density access in the LHC precision era"
+    authors:
+      - family-names: "Buckley"
+        given-names: "A."
+      - family-names: "Ferrando"
+        given-names: "J."
+      - family-names: "Lloyd"
+        given-names: "S."
+      - family-names: "Nordstrom"
+        given-names: "K."
+      - family-names: "Page"
+        given-names: "B."
+      - family-names: "Ruefenacht"
+        given-names: "M."
+      - family-names: "Schoenherr"
+        given-names: "M."
+      - family-names: "Watt"
+        given-names: "G."
+    journal: "European Physical Journal C"
+    volume: 75
+    start: 132
+    year: 2015
+    doi: "10.1140/epjc/s10052-015-3318-8"
+    url: "https://doi.org/10.1140/epjc/s10052-015-3318-8"

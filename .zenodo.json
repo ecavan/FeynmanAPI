@@ -47,6 +47,21 @@
       "identifier": "10.1016/0010-4655(86)90119-0",
       "relation": "cites",
       "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1140/epjc/s10052-015-3318-8",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1140/epjc/s10052-019-7306-2",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/j.cpc.2016.10.013",
+      "relation": "cites",
+      "resource_type": "publication-article"
     }
   ],
   "keywords": [
@@ -57,6 +72,9 @@
     "qgraf",
     "form",
     "looptools",
+    "openloops",
+    "lhapdf",
+    "parton distribution functions",
     "fastapi"
   ]
 }

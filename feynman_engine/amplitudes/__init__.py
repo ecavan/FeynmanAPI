@@ -41,11 +41,32 @@ from feynman_engine.amplitudes.cross_section import (
     total_cross_section_vegas,
     differential_cross_section,
 )
+from feynman_engine.amplitudes.nlo_cross_section import (
+    nlo_cross_section,
+    nlo_cross_section_qed,
+    alpha_s_running,
+    alpha_em_running,
+)
 from feynman_engine.amplitudes.phase_space import (
     rambo_massless,
+    rambo_massive,
     total_cross_section_2to3,
     vegas_integrate,
     VegasGrid,
+)
+from feynman_engine.amplitudes.pdf import (
+    PDFSet,
+    LHAPDFSet,
+    get_builtin_pdf,
+    get_pdf,
+    parton_luminosity,
+)
+from feynman_engine.amplitudes.hadronic import (
+    hadronic_cross_section,
+)
+from feynman_engine.amplitudes.differential import (
+    differential_distribution,
+    hadronic_differential_distribution,
 )
 
 __all__ = [
@@ -86,7 +107,22 @@ __all__ = [
     "total_cross_section_vegas",
     "differential_cross_section",
     "rambo_massless",
+    "rambo_massive",
     "total_cross_section_2to3",
     "vegas_integrate",
     "VegasGrid",
+    "nlo_cross_section",
+    "nlo_cross_section_qed",
+    "alpha_s_running",
+    "alpha_em_running",
+    # PDFs and hadronic cross-sections
+    "PDFSet",
+    "LHAPDFSet",
+    "get_builtin_pdf",
+    "get_pdf",
+    "parton_luminosity",
+    "hadronic_cross_section",
+    # Differential observables
+    "differential_distribution",
+    "hadronic_differential_distribution",
 ]

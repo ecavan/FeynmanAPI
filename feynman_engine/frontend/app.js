@@ -232,6 +232,9 @@ const resultsSection = document.getElementById("results-section");
 const resultsTitle   = document.getElementById("results-title");
 const resultsMeta    = document.getElementById("results-meta");
 const diagramGrid    = document.getElementById("diagram-grid");
+const tabNav         = document.getElementById("tab-nav");
+const tabPanelDiagrams      = document.getElementById("tab-diagrams");
+const tabPanelDistributions = document.getElementById("tab-distributions");
 const loading        = document.getElementById("loading");
 const errorBox       = document.getElementById("error-box");
 const modalOverlay   = document.getElementById("modal-overlay");
@@ -511,25 +514,21 @@ async function fetchAmplitude(process, theory, loops = 0) {
     // ── |M|² section ─────────────────────────────────────────────────────────
     if (data.has_msq) {
       amplitudeFormula.classList.remove("formula-unavailable");
-      const approx = data.approximation_level === "approximate-pointwise";
-      const relation = approx ? "\\approx" : "=";
       if (data.msq_latex && typeof katex !== "undefined") {
         try {
-          katex.render(`|\\mathcal{M}|^2 ${relation} ${data.msq_latex}`, amplitudeFormula, {
+          katex.render(`|\\mathcal{M}|^2 = ${data.msq_latex}`, amplitudeFormula, {
             displayMode: true,
             throwOnError: false,
             trust: true,
           });
         } catch (_) {
-          amplitudeFormula.textContent = `|M|² ${approx ? "≈" : "="} ${data.msq_sympy}`;
+          amplitudeFormula.textContent = `|M|² = ${data.msq_sympy}`;
         }
       } else {
-        amplitudeFormula.textContent = `|M|² ${approx ? "≈" : "="} ${data.msq_sympy}`;
+        amplitudeFormula.textContent = `|M|² = ${data.msq_sympy}`;
       }
       const details = [];
       if (data.description) details.push(data.description);
-      if (data.approximation_level) details.push(`Approximation: ${data.approximation_level}`);
-      if (data.evaluation_point?.label) details.push(`Point: ${data.evaluation_point.label}`);
       if (data.notes) details.push(data.notes);
       amplitudeNotes.textContent = details.join("  ·  ");
       amplitudeSection.classList.remove("hidden");
@@ -653,6 +652,7 @@ function renderResults(data) {
   }
 
   resultsSection.classList.remove("hidden");
+  tabNav.classList.remove("hidden");
 }
 
 function buildDiagramCard(d) {
@@ -883,3 +883,237 @@ function hideError() {
 function escHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ── Differential histogram ────────────────────────────────────────────────────
+const histComputeBtn = document.getElementById("hist-compute-btn");
+const histStatus = document.getElementById("hist-status");
+const histCanvasWrap = document.getElementById("hist-canvas-wrap");
+const histSvg = document.getElementById("hist-svg");
+const histSummary = document.getElementById("hist-summary");
+const obsSelect = document.getElementById("obs-select");
+const histSqrts = document.getElementById("hist-sqrts");
+const histXmin = document.getElementById("hist-xmin");
+const histXmax = document.getElementById("hist-xmax");
+const histNbins = document.getElementById("hist-nbins");
+const histOrder = document.getElementById("hist-order");
+const histNevents = document.getElementById("hist-nevents");
+
+// Auto-set default range when observable changes
+obsSelect.addEventListener("change", () => {
+  const obs = obsSelect.value;
+  const defaults = {
+    cos_theta:  { min: -1,  max: 1,    nbins: 20 },
+    pT_lepton:  { min: 0,   max: 50,   nbins: 25 },
+    pT_photon:  { min: 0,   max: 50,   nbins: 25 },
+    eta_lepton: { min: -5,  max: 5,    nbins: 20 },
+    y_lepton:   { min: -5,  max: 5,    nbins: 20 },
+    M_inv:      { min: 0,   max: 200,  nbins: 25 },
+    M_ll:       { min: 60,  max: 120,  nbins: 24 },
+    DR_ll:      { min: 0,   max: 6.28, nbins: 20 },
+  };
+  const d = defaults[obs];
+  if (d) {
+    histXmin.value = d.min;
+    histXmax.value = d.max;
+    histNbins.value = d.nbins;
+  }
+});
+
+histComputeBtn.addEventListener("click", computeHistogram);
+
+async function computeHistogram() {
+  const process = processInput.value.trim();
+  if (!process) {
+    histStatus.textContent = "Enter a process string above first.";
+    return;
+  }
+  histStatus.textContent = "Computing… (MC sampling can take 10–60 seconds for 2→N)";
+  histCanvasWrap.classList.add("hidden");
+  histComputeBtn.disabled = true;
+
+  const params = new URLSearchParams({
+    process,
+    theory: theorySelect.value,
+    sqrt_s: histSqrts.value,
+    observable: obsSelect.value,
+    bin_min: histXmin.value,
+    bin_max: histXmax.value,
+    n_bins: histNbins.value,
+    order: histOrder.value,
+    n_events: histNevents.value,
+  });
+
+  try {
+    const res = await fetch(`${API_BASE}/amplitude/differential-distribution?${params}`);
+    const data = await res.json();
+    if (!res.ok) {
+      // Trust-blocked processes return 422 with a structured detail object
+      const detail = data.detail;
+      if (res.status === 422 && typeof detail === "object" && detail?.trust_level === "blocked") {
+        histCanvasWrap.classList.remove("hidden");
+        histSvg.innerHTML = "";
+        const reasonHtml =
+          `<div style="background:#fce4e4;border-left:4px solid #b30000;padding:0.85rem 1rem;border-radius:4px;color:#5a0000;">` +
+          `<strong>✕ Process blocked</strong>` +
+          (detail.block_reason ? `<div style="margin-top:0.4rem;">${escHtml(detail.block_reason)}</div>` : "") +
+          (detail.workaround    ? `<div style="margin-top:0.4rem;font-size:0.92em;"><em>Workaround:</em> ${escHtml(detail.workaround)}</div>` : "") +
+          `</div>`;
+        histSummary.innerHTML = reasonHtml;
+        histStatus.textContent = "";
+        return;
+      }
+      histStatus.textContent = "Error: " + (typeof detail === "string" ? detail : JSON.stringify(detail) || res.statusText);
+      histStatus.style.color = "var(--danger, #c33)";
+      return;
+    }
+    histStatus.textContent = "";
+    histStatus.style.color = "";
+    renderHistogram(data);
+  } catch (err) {
+    histStatus.textContent = "Network error: " + err.message;
+    histStatus.style.color = "var(--danger, #c33)";
+  } finally {
+    histComputeBtn.disabled = false;
+  }
+}
+
+function renderHistogram(data) {
+  const edges = data.bin_edges;
+  const widths = data.bin_widths;
+  const dy = data.dsigma_dX_pb;
+  const err = data.dsigma_dX_uncertainty_pb || dy.map(() => 0);
+  const obs = data.observable;
+  const unit = data.unit || "";
+
+  // SVG layout
+  const svgW = 720, svgH = 360;
+  const m = { l: 70, r: 20, t: 30, b: 60 };
+  const w = svgW - m.l - m.r;
+  const h = svgH - m.t - m.b;
+  const xMin = edges[0], xMax = edges[edges.length - 1];
+  const xRange = xMax - xMin || 1;
+
+  // y range
+  const yMaxRaw = Math.max(...dy.map((v, i) => Math.abs(v) + (err[i] || 0)));
+  const yMax = yMaxRaw > 0 ? yMaxRaw * 1.10 : 1;
+
+  const xPx = x => m.l + ((x - xMin) / xRange) * w;
+  const yPx = y => m.t + h - (y / yMax) * h;
+
+  let parts = [];
+  // axes
+  parts.push(`<line class="axis" x1="${m.l}" y1="${m.t + h}" x2="${m.l + w}" y2="${m.t + h}" />`);
+  parts.push(`<line class="axis" x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${m.t + h}" />`);
+
+  // x ticks
+  const nTicks = 6;
+  for (let i = 0; i <= nTicks; i++) {
+    const xv = xMin + (i / nTicks) * xRange;
+    const px = xPx(xv);
+    parts.push(`<line class="axis" x1="${px}" y1="${m.t + h}" x2="${px}" y2="${m.t + h + 4}" />`);
+    parts.push(`<text class="tick" x="${px}" y="${m.t + h + 16}" text-anchor="middle">${formatTick(xv)}</text>`);
+  }
+  // y ticks
+  for (let i = 0; i <= 5; i++) {
+    const yv = (i / 5) * yMax;
+    const py = yPx(yv);
+    parts.push(`<line class="axis" x1="${m.l - 4}" y1="${py}" x2="${m.l}" y2="${py}" />`);
+    parts.push(`<text class="tick" x="${m.l - 6}" y="${py + 3}" text-anchor="end">${formatTick(yv)}</text>`);
+  }
+
+  // bars + error bars
+  for (let i = 0; i < dy.length; i++) {
+    const x0 = xPx(edges[i]);
+    const x1 = xPx(edges[i + 1]);
+    const barW = Math.max(x1 - x0 - 1, 1);
+    const y0 = yPx(Math.max(dy[i], 0));
+    const barH = Math.max(yPx(0) - y0, 0);
+    parts.push(`<rect class="bar" x="${x0}" y="${y0}" width="${barW}" height="${barH}" />`);
+    if (err[i] > 0) {
+      const xc = (x0 + x1) / 2;
+      const yu = yPx(Math.max(dy[i] + err[i], 0));
+      const yl = yPx(Math.max(dy[i] - err[i], 0));
+      parts.push(`<line class="errbar" x1="${xc}" y1="${yu}" x2="${xc}" y2="${yl}" />`);
+      parts.push(`<line class="errbar" x1="${xc - 3}" y1="${yu}" x2="${xc + 3}" y2="${yu}" />`);
+      parts.push(`<line class="errbar" x1="${xc - 3}" y1="${yl}" x2="${xc + 3}" y2="${yl}" />`);
+    }
+  }
+
+  // axis labels
+  const xLabel = unit ? `${obs} (${unit})` : obs;
+  parts.push(`<text class="axis-label" x="${m.l + w / 2}" y="${svgH - 12}" text-anchor="middle">${xLabel}</text>`);
+  parts.push(
+    `<text class="axis-label" x="${15}" y="${m.t + h / 2}" text-anchor="middle" ` +
+    `transform="rotate(-90 15 ${m.t + h / 2})">dσ/d(${obs}) [pb${unit ? "/" + unit : ""}]</text>`
+  );
+  parts.push(`<text class="axis-label" x="${m.l + w / 2}" y="${m.t - 10}" text-anchor="middle">` +
+    `${escHtml(data.process)}, √s = ${data.sqrt_s_gev} GeV — ${data.method} (${data.order})</text>`);
+
+  histSvg.innerHTML = parts.join("\n");
+
+  // Summary text
+  const sigmaTotal = data.sigma_total_pb;
+  const summary = [];
+  summary.push(`<strong>σ_total</strong> = ${sigmaTotal.toExponential(4)} pb`);
+  summary.push(`<strong>order</strong>: ${data.order}`);
+  summary.push(`<strong>method</strong>: ${data.method}`);
+  if (data.k_factor) summary.push(`<strong>K</strong> = ${data.k_factor.toFixed(6)}`);
+  if (data.pdf) summary.push(`<strong>PDF</strong>: <code>${escHtml(data.pdf)}</code>`);
+  if (data.n_events) summary.push(`<strong>n_events</strong>: ${data.n_events}`);
+  if (data.limitations) {
+    summary.push(`<em style="color:#a60">limitations: ${escHtml(data.limitations)}</em>`);
+  }
+  // Trust badge + caveat banner (from /amplitude/cross-section trust system)
+  const trustBadge = renderTrustBadge(data);
+  histSummary.innerHTML = trustBadge + summary.join("  ·  ");
+
+  histCanvasWrap.classList.remove("hidden");
+}
+
+// ── Trust badge / caveat rendering ───────────────────────────────────────────
+function renderTrustBadge(data) {
+  const level = data.trust_level;
+  if (!level) return "";
+  const colors = {
+    validated:   { bg: "#e7f5ec", border: "#1e7d36", fg: "#0c4319", icon: "✓" },
+    approximate: { bg: "#fff8e1", border: "#c98400", fg: "#7a4f00", icon: "≈" },
+    rough:       { bg: "#ffe1cc", border: "#cc5500", fg: "#7a3300", icon: "!" },
+    blocked:     { bg: "#fce4e4", border: "#b30000", fg: "#5a0000", icon: "✕" },
+  };
+  const c = colors[level] || colors.approximate;
+
+  let banner = `<div style="background:${c.bg};border-left:4px solid ${c.border};padding:0.6rem 0.9rem;margin-bottom:0.7rem;border-radius:4px;font-size:0.9em;color:${c.fg}">`;
+  banner += `<strong>${c.icon} Trust: ${level}</strong>`;
+  if (data.trust_reference) {
+    banner += ` &mdash; <span style="font-size:0.92em">${escHtml(data.trust_reference)}</span>`;
+  }
+  if (data.accuracy_caveat) {
+    banner += `<div style="margin-top:0.35rem;font-size:0.92em">${escHtml(data.accuracy_caveat)}</div>`;
+  }
+  banner += `</div>`;
+  return banner;
+}
+
+function formatTick(v) {
+  if (Math.abs(v) >= 100) return v.toFixed(0);
+  if (Math.abs(v) >= 10)  return v.toFixed(1);
+  if (Math.abs(v) >= 1)   return v.toFixed(2);
+  if (Math.abs(v) >= 0.01) return v.toFixed(3);
+  if (v === 0) return "0";
+  return v.toExponential(1);
+}
+
+// ── Tab navigation ───────────────────────────────────────────────────────────
+function activateTab(tabId) {
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  tabPanelDiagrams.classList.toggle("hidden", tabId !== "diagrams");
+  tabPanelDistributions.classList.toggle("hidden", tabId !== "distributions");
+}
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+});

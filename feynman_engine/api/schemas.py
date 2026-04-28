@@ -67,6 +67,10 @@ class AmplitudeResponse(BaseModel):
     availability_message: Optional[str] = None
     approximation_level: str = "exact-symbolic"
     evaluation_point: Optional[dict] = None
+    # Honesty flags — what this amplitude can actually be used for.
+    # See AmplitudeResult.features for the canonical map.
+    is_symbolic_function: bool = True
+    features: Optional[dict] = None
 
 
 class LoopIntegralResponse(BaseModel):

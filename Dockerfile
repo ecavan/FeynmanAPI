@@ -67,6 +67,82 @@ RUN set -ex \
          -Wl,--whole-archive,$(pwd)/build/libooptools.a,--no-whole-archive \
          -lgfortran -lm
 
+# ─── LHAPDF builder ──────────────────────────────────────────────────────────
+# LHAPDF is the standard PDF library (Buckley et al., EPJ C 75 (2015) 132).
+# We compile the C++ library + Python bindings against the same Python that
+# the production image uses (3.11) and install to /opt/lhapdf so it's
+# auto-discovered by feynman_engine.amplitudes.pdf at runtime.
+FROM python:3.11-slim AS lhapdf-builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    libc6-dev \
+    libstdc++-12-dev \
+    make \
+    curl \
+    ca-certificates \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY feynman_engine/resources/lhapdf/LHAPDF-6.5.5.tar.gz ./
+
+RUN set -ex \
+    && mkdir -p src \
+    && tar -xzf LHAPDF-6.5.5.tar.gz -C src \
+    && cd src/LHAPDF-6.5.5 \
+    && PYTHON=$(which python) ./configure --prefix=/opt/lhapdf \
+    && make -j2 \
+    && make install
+
+# Bundle a default PDF set (CT18LO).  We try to download it during build;
+# if the build host lacks internet, the stage still produces a usable
+# LHAPDF install and users can run `feynman install-pdf-set CT18LO` later.
+RUN mkdir -p /opt/lhapdf/share/LHAPDF \
+    && cd /opt/lhapdf/share/LHAPDF \
+    && (curl -fsL "http://lhapdfsets.web.cern.ch/lhapdfsets/current/CT18LO.tar.gz" -o CT18LO.tar.gz \
+        && tar xzf CT18LO.tar.gz && rm CT18LO.tar.gz \
+        && echo "CT18LO bundled" \
+        || echo "WARNING: CT18LO download failed during build; install via feynman install-pdf-set CT18LO")
+
+# ─── OpenLoops builder ───────────────────────────────────────────────────────
+# OpenLoops 2 (Buccioni et al., EPJ C 79 (2019) 866, arXiv:1907.13071) is the
+# automated tree + one-loop amplitude generator used by FeynmanEngine for
+# generic NLO over arbitrary processes.  Build the framework + bundle a
+# minimal process library (ppllj = Drell-Yan + jet) so the production image
+# can compute generic NLO out of the box.
+FROM python:3.11-slim AS openloops-builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gfortran \
+    make \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY feynman_engine/resources/openloops/OpenLoops-OpenLoops-2.1.4.tar.gz ./
+
+RUN set -ex \
+    && mkdir -p src \
+    && tar -xzf OpenLoops-OpenLoops-2.1.4.tar.gz -C src \
+    && mv src/OpenLoops-OpenLoops-2.1.4 src/openloops \
+    && cd src/openloops \
+    && PYTHON=$(which python) ./scons \
+    && mkdir -p /opt/openloops \
+    && cp -r openloops openloops.cfg.tmpl scons SConstruct config examples \
+            lib pyol lib_src include scons-local /opt/openloops/ \
+    && chmod +x /opt/openloops/openloops /opt/openloops/scons \
+    && mkdir -p /opt/openloops/proclib
+
+# Bundle the default ppllj (Drell-Yan + jet) process library.  Compiles
+# only against the current build; users add more via `feynman install-process <name>`.
+RUN cd /opt/openloops \
+    && (./openloops libinstall ppllj \
+        && echo "ppllj bundled" \
+        || echo "WARNING: ppllj download failed during build; install via feynman install-process ppllj")
+
 # ─── Production image ────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
@@ -112,6 +188,23 @@ COPY --from=looptools-builder /build/liblooptools.so ./bin/liblooptools.so
 # Drop in the Linux FORM binary compiled in the builder stage.
 COPY --from=form-builder /build/form ./bin/form
 RUN chmod +x ./bin/form
+
+# Drop in the LHAPDF install + default PDF set from the builder stage.
+# feynman_engine.amplitudes.pdf auto-discovers /opt/lhapdf and configures
+# sys.path + LHAPDF_DATA_PATH + LD_LIBRARY_PATH at module import — no env
+# vars needed.  Also probe /tmp/lhapdf-install (legacy/dev location).
+COPY --from=lhapdf-builder /opt/lhapdf /opt/lhapdf
+
+# Drop in the OpenLoops install + default ppllj process library from the
+# builder stage.  feynman_engine.amplitudes.openloops_bridge auto-discovers
+# /opt/openloops at import.  We need libgfortran5 (already installed above)
+# for the Fortran shared libraries to load.
+COPY --from=openloops-builder /opt/openloops /opt/openloops
+
+ENV LHAPDF_DATA_PATH=/opt/lhapdf/share/LHAPDF \
+    LD_LIBRARY_PATH=/opt/lhapdf/lib:/opt/openloops/lib:/opt/openloops/proclib \
+    PYTHONPATH=/opt/lhapdf/lib/python3.11/site-packages:/opt/openloops/pyol/tools \
+    OPENLOOPS_PREFIX=/opt/openloops
 
 EXPOSE ${PORT:-10000}
 

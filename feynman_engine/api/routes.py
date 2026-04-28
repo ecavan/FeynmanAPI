@@ -243,6 +243,8 @@ def get_amplitude_endpoint(
                 else get_loop_integral_latex(process_clean, theory_upper, loops=loops)
             )
         has_msq = result.msq is not None
+        features = getattr(result, "features", None) or {}
+
         return AmplitudeResponse(
             process=result.process,
             theory=result.theory,
@@ -263,6 +265,8 @@ def get_amplitude_endpoint(
             ),
             approximation_level=getattr(result, "approximation_level", "exact-symbolic"),
             evaluation_point=getattr(result, "evaluation_point", None),
+            is_symbolic_function=True,
+            features=features,
         )
 
     integral = (
@@ -638,6 +642,7 @@ def get_cross_section(
     process:  str   = Query(..., description="e.g. 'e+ e- -> mu+ mu-'"),
     theory:   str   = Query(default="QED"),
     sqrt_s:   float = Query(..., description="Centre-of-mass energy √s in GeV"),
+    order:    str   = Query(default="LO", description="Perturbative order: 'LO' or 'NLO'"),
     eps:      float = Query(default=1e-3, description="Endpoint cutoff for t-channel poles"),
     n_events: int   = Query(default=100_000, description="MC samples (for 2→N with N≥3)"),
     min_invariant_mass: float = Query(default=0.0, description="Minimum invariant mass cut in GeV (for IR-safe 2→N cross sections)"),
@@ -652,9 +657,92 @@ def get_cross_section(
     For 2→2 processes, uses deterministic cosθ integration (scipy.quad).
     For 2→N (N≥3), uses either flat RAMBO MC or Vegas adaptive MC sampling.
 
+    Set order='NLO' to compute the NLO cross-section.  For QED e+e-→ff̄
+    (different flavor) uses the exact analytic K-factor K = 1 + 3α/(4π).
+    For all other 2→N processes (QED, QCD, EW), uses the running-coupling
+    approximation: α(Q²)/α(μ₀²) evaluated at Q² = s via the 1-loop
+    β-function (QCD) or vacuum polarisation (QED).  The coupling power is
+    auto-detected from the symbolic amplitude.
+
     Set method='vegas' for processes with sharp kinematic features (t-channel
     poles, resonances) where flat sampling converges slowly.
+
+    Every result includes a ``trust_level`` field
+    (validated/approximate/rough) plus a ``trust_reference`` describing
+    where the number was anchored.  Processes known to give wrong answers
+    are refused with HTTP 422 rather than returning a misleading number.
     """
+    from feynman_engine.physics.trust import classify, TrustLevel, trust_payload
+
+    # For pp processes, classify against the actual hadronic theory (auto-
+    # detect from final state) instead of the user-passed theory, which
+    # often defaults to QED for hadronic queries.
+    process_lower = process.strip().lower()
+    is_hadronic = process_lower.startswith("p p ->") or process_lower.startswith("p p->")
+    if is_hadronic:
+        # Probe the hadronic registry directly; auto-detect theory if needed.
+        from feynman_engine.amplitudes.hadronic import _detect_partonic_theory
+        final_state = process.strip().split("->", 1)[1].strip() if "->" in process else ""
+        trust_theory = (theory.upper() if theory and theory.upper() != "QED"
+                        else _detect_partonic_theory(final_state))
+    else:
+        trust_theory = theory
+
+    # ── Trust gate ─────────────────────────────────────────────────────
+    trust_entry = classify(process.strip(), trust_theory, order)
+    if trust_entry.trust_level == TrustLevel.BLOCKED:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "process": process.strip(),
+                "theory": trust_theory.upper() if trust_theory else theory.upper(),
+                "order": order.upper(),
+                "trust_level": "blocked",
+                "block_reason": trust_entry.block_reason,
+                "workaround": trust_entry.workaround,
+                "reference": trust_entry.reference,
+            },
+        )
+
+    # ── Hadronic route (detect "p p ->" processes) ────────────────────
+    if is_hadronic:
+        from feynman_engine.amplitudes.hadronic import hadronic_cross_section
+        result = hadronic_cross_section(
+            process=process.strip(),
+            sqrt_s=sqrt_s,
+            theory=theory.upper(),
+            order=order.upper(),
+            m_ll_min=min_invariant_mass if min_invariant_mass > 0 else 60.0,
+            m_ll_max=120.0,
+        )
+        if not result.get("supported", False):
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("error", f"Hadronic cross-section unavailable for '{process}'."),
+            )
+        result.update(trust_payload(trust_entry))
+        return result
+
+    # ── NLO route ───────────────────────────────────────────────────────
+    if order.upper() == "NLO":
+        from feynman_engine.amplitudes.nlo_cross_section import nlo_cross_section
+
+        result = nlo_cross_section(
+            process=process.strip(),
+            theory=theory.upper(),
+            sqrt_s=sqrt_s,
+            n_events=n_events,
+            min_invariant_mass=min_invariant_mass,
+        )
+        if not result.get("supported", False):
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("error", f"NLO cross-section unavailable for '{process}' in {theory}."),
+            )
+        result.update(trust_payload(trust_entry))
+        return result
+
+    # ── LO route (existing) ─────────────────────────────────────────────
     from feynman_engine.amplitudes.cross_section import (
         total_cross_section,
         total_cross_section_mc,
@@ -709,6 +797,7 @@ def get_cross_section(
             detail=result.get("error", f"Cross-section unavailable for '{process}' in {theory}."),
         )
 
+    result.update(trust_payload(trust_entry))
     return result
 
 
@@ -853,6 +942,193 @@ def get_loop_analytic_endpoint(
         "supported": True,
         "note": "Evaluated using analytic closed-form formulas (no LoopTools required). Delta_UV = 0, matching LoopTools conventions.",
     }
+
+
+@router.get(
+    "/amplitude/hadronic-cross-section",
+    summary="Hadronic (pp) cross-section via PDF convolution",
+)
+def get_hadronic_cross_section(
+    process: str = Query(..., description="e.g. 'p p -> mu+ mu-' or 'p p -> t t~'"),
+    sqrt_s: float = Query(..., description="Proton-proton CM energy in GeV (e.g. 13000, 14000)"),
+    theory: str = Query(
+        default="",
+        description="Partonic theory: 'QCD', 'QCDQED', 'EW', 'QED'. Auto-detected from final state if blank.",
+    ),
+    order: str = Query(default="LO", description="Perturbative order: 'LO' or 'NLO'"),
+    pdf_name: str = Query(
+        default="auto",
+        description=(
+            "PDF set: 'auto' (LHAPDF CT18LO if installed, else built-in), "
+            "'LO-simple' (built-in), or any LHAPDF set name (e.g. 'NNPDF40_lo_as_01180')."
+        ),
+    ),
+    pdf_member: int = Query(default=0, description="LHAPDF set member (0 = central)"),
+    mu_f: Optional[float] = Query(default=None, description="Factorization scale in GeV (auto if blank)"),
+    m_ll_min: float = Query(default=60.0, description="Min dilepton mass in GeV (Drell-Yan only)"),
+    m_ll_max: float = Query(default=120.0, description="Max dilepton mass in GeV (Drell-Yan only)"),
+    n_grid: int = Query(default=25, description="Grid points per channel (generic path)"),
+    n_events_mc: int = Query(default=15_000, description="MC events per grid point (2→N≥3 channels)"),
+    min_partonic_cm: Optional[float] = Query(
+        default=None,
+        description=(
+            "Minimum partonic √ŝ in GeV (generic path).  Required for fully-massless "
+            "final states (γγ, gg, jj, light qq̄) where σ̂ ∝ 1/ŝ is IR-divergent; "
+            "defaults to 50 GeV in that case.  Ignored for DY/tt̄ specialized paths."
+        ),
+    ),
+    min_pT: float = Query(
+        default=0.0,
+        description=(
+            "Per-particle pT cut in GeV for 2→2 massless final states "
+            "(diphoton, dijet, etc.).  Restricts the partonic angular "
+            "integration to |cosθ*| < √(1−4pT²/ŝ).  LHC photon analyses "
+            "typically use pT > 20-30 GeV."
+        ),
+    ),
+):
+    """Compute a hadronic (proton-proton) cross-section by convolving partonic
+    cross-sections with parton distribution functions.
+
+    Three execution paths:
+
+    - **Drell-Yan** (`p p -> mu+ mu-`, `p p -> e+ e-`, `p p -> tau+ tau-`) —
+      analytic γ\\*/Z partonic σ̂ integrated over M_ll.
+    - **Top pairs** (`p p -> t t~`) — gg + qq̄ partonic σ̂ grid.
+    - **Generic** (any other `p p -> F`) — enumerates every parton channel
+      (a, b) for which an amplitude exists, builds σ̂(√ŝ) grids, and convolves.
+      Channels without an amplitude are silently skipped; the function returns
+      ``supported=False`` (404) only when no channel works at all.
+
+    PDFs default to LHAPDF CT18LO if the bindings are installed, otherwise the
+    built-in LO-simple parametrization.  Use ``order='NLO'`` to apply running-
+    coupling rescaling of σ̂.
+    """
+    from feynman_engine.amplitudes.hadronic import hadronic_cross_section
+
+    result = hadronic_cross_section(
+        process=process.strip(),
+        sqrt_s=sqrt_s,
+        theory=theory.upper() if theory else None,
+        pdf_name=pdf_name,
+        pdf_member=pdf_member,
+        mu_f=mu_f,
+        order=order.upper(),
+        m_ll_min=m_ll_min,
+        m_ll_max=m_ll_max,
+        n_grid=n_grid,
+        n_events_mc=n_events_mc,
+        min_partonic_cm=min_partonic_cm,
+        min_pT=min_pT,
+    )
+    if not result.get("supported", False):
+        raise HTTPException(
+            status_code=404,
+            detail=result.get("error", f"Hadronic cross-section unavailable for '{process}'."),
+        )
+    return result
+
+
+@router.get(
+    "/amplitude/differential-distribution",
+    summary="Differential cross-section histogram dσ/dX",
+)
+def get_differential_distribution(
+    process: str = Query(..., description="e.g. 'e+ e- -> mu+ mu-' or 'p p -> mu+ mu-'"),
+    sqrt_s: float = Query(..., description="Centre-of-mass energy in GeV"),
+    observable: str = Query(
+        ...,
+        description=(
+            "One of: cos_theta, pT_lepton, pT_photon, eta_lepton, y_lepton, "
+            "M_inv, M_ll, DR_ll."
+        ),
+    ),
+    bin_min: float = Query(..., description="Lower edge of histogram range"),
+    bin_max: float = Query(..., description="Upper edge of histogram range"),
+    n_bins: int = Query(default=20, description="Number of histogram bins"),
+    theory: str = Query(default="", description="Theory (auto-detect if blank for pp)"),
+    order: str = Query(
+        default="LO",
+        description="LO, NLO-running (rescale all bins), or NLO-subtracted (e+e-→μ+μ- only)",
+    ),
+    n_events: int = Query(default=100_000, description="MC samples for 2→N (ignored for 2→2 cos θ)"),
+    min_invariant_mass: float = Query(
+        default=1.0, description="IR cut on pairwise invariants (GeV) for 2→N",
+    ),
+    pdf_name: str = Query(default="auto", description="PDF set name (hadronic only)"),
+    mu_f: Optional[float] = Query(default=None, description="Factorization scale (hadronic only)"),
+    min_partonic_cm: Optional[float] = Query(
+        default=None, description="Minimum partonic √ŝ (GeV, hadronic generic path only)",
+    ),
+):
+    """Compute dσ/dX as a histogram in pb / unit(X).
+
+    For ``e+ e- -> ...`` and similar partonic processes, runs the per-event
+    histogram fill against the engine's |M̄|².  For ``p p -> ...`` processes,
+    enumerates parton channels and convolves with PDF luminosities at each τ
+    grid point.
+
+    Returns bin edges, centers, widths, dσ/dX, MC uncertainty per bin, and
+    the integrated σ_total.  Suitable for direct rendering as a bar histogram.
+    """
+    import numpy as np
+    from feynman_engine.amplitudes.differential import (
+        differential_distribution, hadronic_differential_distribution,
+    )
+
+    bin_edges = np.linspace(bin_min, bin_max, n_bins + 1).tolist()
+    proc_lower = process.strip().lower()
+    is_hadronic = proc_lower.startswith("p p ->") or proc_lower.startswith("p p->")
+
+    # Trust gate: refuse blocked processes here too
+    from feynman_engine.physics.trust import classify, TrustLevel, trust_payload
+    inferred_theory = (theory.upper() if theory else
+                       ("EW" if is_hadronic else "QED"))
+    trust_entry = classify(process.strip(), inferred_theory, order)
+    if trust_entry.trust_level == TrustLevel.BLOCKED:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "process": process.strip(),
+                "theory": inferred_theory,
+                "trust_level": "blocked",
+                "block_reason": trust_entry.block_reason,
+                "workaround": trust_entry.workaround,
+            },
+        )
+
+    if is_hadronic:
+        result = hadronic_differential_distribution(
+            process=process.strip(),
+            sqrt_s=sqrt_s,
+            observable=observable,
+            bin_edges=bin_edges,
+            theory=theory.upper() if theory else None,
+            pdf_name=pdf_name,
+            mu_f=mu_f,
+            n_events=n_events,
+            min_invariant_mass=min_invariant_mass,
+            min_partonic_cm=min_partonic_cm,
+        )
+    else:
+        result = differential_distribution(
+            process=process.strip(),
+            theory=theory.upper() if theory else "QED",
+            sqrt_s=sqrt_s,
+            observable=observable,
+            bin_edges=bin_edges,
+            order=order,
+            n_events=n_events,
+            min_invariant_mass=min_invariant_mass,
+        )
+
+    if not result.get("supported", False):
+        raise HTTPException(
+            status_code=404,
+            detail=result.get("error", f"Differential unavailable for '{process}'."),
+        )
+    result.update(trust_payload(trust_entry))
+    return result
 
 
 @router.get("/amplitude/processes", summary="List processes with pre-computed amplitudes")
