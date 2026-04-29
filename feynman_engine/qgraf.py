@@ -93,8 +93,9 @@ def build_qgraf(target: str | Path | None = None, force: bool = False) -> Path:
             return _build_qgraf_from_archive(Path(resource_path), output_path, gfortran)
 
     raise QGrafBuildError(
-        "No QGRAF source archive was found. Expected qgraf-3.6.10.tgz in the project root, "
-        "package resources, or FEYNMAN_QGRAF_SOURCE."
+        "No QGRAF source archive was found. Expected qgraf-3.6.10.tgz in "
+        "feynman_engine/resources/qgraf/ (the bundled location) or set "
+        "FEYNMAN_QGRAF_SOURCE to point at an alternate archive."
     )
 
 

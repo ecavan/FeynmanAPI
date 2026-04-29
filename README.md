@@ -7,6 +7,9 @@
 
 A Feynman diagram generator and amplitude calculator for particle physics. Give it a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams as SVG/TikZ, the symbolic spin-averaged |M|^2, integrated cross-sections (LO and NLO), and --- for standard processes --- numerically evaluated 1-loop results via LoopTools.
 
+![FeynmanEngine browser UI](examples/frontend.png)
+*The browser UI shipped with the package: 128+ pre-loaded examples in the sidebar, diagram + |M̄|² + cross-section in one panel.  Run `feynman serve` and open http://localhost:8000.*
+
 **Built on proven HEP tooling:**
 - [QGRAF](http://cfif.ist.utl.pt/~paulo/qgraf.html) --- the industry-standard Feynman diagram enumerator used in professional NLO/NNLO calculations worldwide
 - [FORM](https://www.nikhef.nl/~form/) --- the standard symbolic algebra engine for high-energy physics trace calculations

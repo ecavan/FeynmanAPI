@@ -121,8 +121,9 @@ def build_looptools(target: str | Path | None = None, force: bool = False) -> Pa
             return _build_looptools_from_archive(Path(resource_path), output_path, gfortran, make)
 
     raise LoopToolsBuildError(
-        "No LoopTools source archive was found. Expected LoopTools-2.16.tar in the project "
-        "root, package resources, or FEYNMAN_LOOPTOOLS_SOURCE."
+        "No LoopTools source archive was found. Expected LoopTools-2.16.tar in "
+        "feynman_engine/resources/looptools/ (the bundled location) or set "
+        "FEYNMAN_LOOPTOOLS_SOURCE to point at an alternate archive."
     )
 
 

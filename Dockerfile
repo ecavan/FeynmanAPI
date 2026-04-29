@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gfortran \
     && rm -rf /var/lib/apt/lists/*
 
-COPY qgraf-3.6.10.tgz ./
+COPY feynman_engine/resources/qgraf/qgraf-3.6.10.tgz ./
 
 RUN mkdir -p src out \
     && tar -xzf qgraf-3.6.10.tgz -C src \
@@ -131,8 +131,15 @@ RUN set -ex \
     && cd src/openloops \
     && PYTHON=$(which python) ./scons \
     && mkdir -p /opt/openloops \
-    && cp -r openloops openloops.cfg.tmpl scons SConstruct config examples \
-            lib pyol lib_src include scons-local /opt/openloops/ \
+    # Copy each OpenLoops tree entry that actually exists in this release.
+    # Mirrors the defensive `if src.exists(): copy` logic in
+    # feynman_engine/openloops.py:_install_openloops() — OpenLoops 2.1.4
+    # does NOT ship a top-level `config/` directory (the runtime config
+    # lives in openloops.cfg.tmpl); some entries appear only post-build.
+    && for entry in openloops openloops.cfg.tmpl scons SConstruct \
+                    lib pyol lib_src include scons-local config examples; do \
+        if [ -e "$entry" ]; then cp -r "$entry" /opt/openloops/; fi; \
+    done \
     && chmod +x /opt/openloops/openloops /opt/openloops/scons \
     && mkdir -p /opt/openloops/proclib
 

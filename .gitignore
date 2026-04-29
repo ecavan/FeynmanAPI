@@ -15,8 +15,8 @@ bin/liblooptools.dylib
 bin/liblooptools.so
 bin/form
 
-# Root-level LoopTools archive (bundled copy lives in feynman_engine/resources/looptools/)
-/LoopTools-2.16.tar
+# Claude Code session artifacts (transient, never committed)
+.claude/
 
 # Compiled outputs
 *.pdf

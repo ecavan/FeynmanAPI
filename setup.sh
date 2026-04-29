@@ -39,7 +39,7 @@ else
     echo "✓ Built QGRAF from bundled source archive"
   else
     echo "✗ Unable to build QGRAF automatically."
-    echo "  Ensure gfortran is installed and that qgraf-3.6.10.tgz is present."
+    echo "  Ensure gfortran is installed and feynman_engine/resources/qgraf/qgraf-3.6.10.tgz is present."
     exit 1
   fi
 fi
