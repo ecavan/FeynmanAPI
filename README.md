@@ -21,8 +21,6 @@ A Feynman diagram generator and amplitude calculator for particle physics. Type 
 - [TikZ-Feynman](https://ctan.org/pkg/tikz-feynman) for diagram rendering
 - [FastAPI](https://fastapi.tiangolo.com/) and [SciPy](https://scipy.org/)
 
-Full citations are in the [Citations](#citations) section at the bottom.
-
 ## Contents
 
 - [Installation](#installation)
