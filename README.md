@@ -8,7 +8,7 @@
 A Feynman diagram generator and amplitude calculator for particle physics. Type a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams (SVG/TikZ), the symbolic spin-averaged $|\overline{\mathcal{M}}|^2$, integrated cross-sections at LO and NLO, decay widths, and 1-loop scalar integrals.
 
 ![FeynmanEngine browser UI](examples/frontend.png)
-*The browser UI shipped with the package: 128+ pre-loaded examples in the sidebar, diagram and $|\overline{\mathcal{M}}|^2$ and cross-section in one panel. Run `feynman serve` and open http://localhost:8000.*
+*The browser UI shipped with the package; 128+ pre-loaded examples in the sidebar*
 
 **Built on proven HEP tooling:**
 
