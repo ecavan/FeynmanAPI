@@ -24,8 +24,25 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent
 _BIN_DIR = _PROJECT_ROOT / "bin"
 _QGRAF_PIPE = _BIN_DIR / "qgraf_pipe"
 _QGRAF_STD  = _BIN_DIR / "qgraf"
-_QGRAF_CONTRIB_MODELS = _PROJECT_ROOT / "contrib" / "qgraf" / "models"
-_QGRAF_CONTRIB_STYLES = _PROJECT_ROOT / "contrib" / "qgraf" / "styles"
+
+# QGRAF model and style files.  For dev installs these live at
+# `<repo>/contrib/qgraf/{models,styles}`; for pip-installed wheels they ship
+# inside the package at `feynman_engine/resources/qgraf/{models,styles}`.
+# Try the packaged location first so pip-installed users work out of the box,
+# then fall back to the repo location for dev installs.
+_PACKAGE_QGRAF_DIR = Path(__file__).parent.parent / "resources" / "qgraf"
+_REPO_QGRAF_DIR    = _PROJECT_ROOT / "contrib" / "qgraf"
+
+if (_PACKAGE_QGRAF_DIR / "models").is_dir():
+    _QGRAF_CONTRIB_MODELS = _PACKAGE_QGRAF_DIR / "models"
+else:
+    _QGRAF_CONTRIB_MODELS = _REPO_QGRAF_DIR / "models"
+
+if (_PACKAGE_QGRAF_DIR / "styles").is_dir():
+    _QGRAF_CONTRIB_STYLES = _PACKAGE_QGRAF_DIR / "styles"
+else:
+    _QGRAF_CONTRIB_STYLES = _REPO_QGRAF_DIR / "styles"
+
 _FEYNMAN_STY = _QGRAF_CONTRIB_STYLES / "feynman.sty"
 
 QGRAF_TIMEOUT = 60  # seconds

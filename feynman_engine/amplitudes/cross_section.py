@@ -463,6 +463,29 @@ def differential_cross_section(
     return dsigma * GEV2_TO_PB
 
 
+def _attach_trust(result: dict, process: str, theory: str, order: str = "LO") -> dict:
+    """Inject trust_level / accuracy_caveat into a cross-section result dict.
+
+    Mirrors what the REST `/api/amplitude/cross-section` route does so that
+    Python users calling total_cross_section[_mc|_vegas]() directly get the
+    same trust disclosure.  If trust lookup fails for any reason, the result
+    is returned unchanged (no exception propagates from the trust system).
+    """
+    if not isinstance(result, dict) or not result.get("supported", True):
+        return result
+    try:
+        from feynman_engine.physics.trust import classify
+        entry = classify(process.strip(), theory.upper(), order.upper())
+        result["trust_level"] = entry.trust_level.value
+        if entry.reference:
+            result["trust_reference"] = entry.reference
+        if entry.accuracy_caveat:
+            result["accuracy_caveat"] = entry.accuracy_caveat
+    except Exception:
+        pass
+    return result
+
+
 def total_cross_section(
     process: str,
     theory: str,
@@ -589,7 +612,7 @@ def total_cross_section(
             r"\frac{|\overline{\mathcal{M}}|^2}{32\pi s} \,\mathrm{d}(\cos\theta)"
         )
 
-    return {
+    return _attach_trust({
         "process":               process.strip(),
         "theory":                theory.upper(),
         "sqrt_s_gev":            sqrt_s,
@@ -606,7 +629,7 @@ def total_cross_section(
         "masses_gev":            list(masses),
         "identical_particle_factor": sym_factor,
         "supported":             True,
-    }
+    }, process, theory, "LO")
 
 
 def total_cross_section_mc(
@@ -768,7 +791,7 @@ def total_cross_section_mc(
 
     n_passed = int(np.sum(cut_weights > 0)) if min_invariant_mass > 0.0 else n_events
 
-    return {
+    return _attach_trust({
         "process": process.strip(),
         "theory": theory.upper(),
         "sqrt_s_gev": sqrt_s,
@@ -782,7 +805,7 @@ def total_cross_section_mc(
         "method": "monte-carlo-rambo",
         "converged": True,
         "supported": True,
-    }
+    }, process, theory, "LO")
 
 
 def total_cross_section_vegas(
@@ -1035,7 +1058,7 @@ def total_cross_section_vegas(
     sigma_pb = sigma_gev2 * _GEV2_PB
     error_pb = error_gev2 * _GEV2_PB
 
-    return {
+    return _attach_trust({
         "process": process.strip(),
         "theory": theory.upper(),
         "sqrt_s_gev": sqrt_s,
@@ -1051,4 +1074,4 @@ def total_cross_section_vegas(
         "method": "vegas-adaptive",
         "converged": vresult["converged"],
         "supported": True,
-    }
+    }, process, theory, "LO")

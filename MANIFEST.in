@@ -1,5 +1,7 @@
 include qgraf-3.6.10.tgz
 recursive-include feynman_engine/resources/qgraf *.tgz
+recursive-include feynman_engine/resources/qgraf/models *.mod
+recursive-include feynman_engine/resources/qgraf/styles *.sty
 recursive-include feynman_engine/resources/looptools *.tar
 recursive-include feynman_engine/resources/form *.tar.gz
 recursive-include feynman_engine/resources/lhapdf *.tar.gz

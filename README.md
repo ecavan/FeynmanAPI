@@ -91,35 +91,19 @@ FeynmanEngine takes a process string and produces, end-to-end:
 
 ## Installation
 
-### Docker (recommended — everything bundled)
+Three install paths — Docker (1 min), full pip (~10–20 min), or lightweight pip (~3 min). Quick start:
 
 ```bash
+# Easiest — everything bundled
 docker run -p 8000:8000 ecavan/feynman-api:latest
-# Open http://localhost:8000
-```
 
-The image includes QGRAF, FORM, LoopTools, LHAPDF (with CT18LO), OpenLoops 2 (with the ppllj process library), and the LaTeX/SVG rendering stack.
-
-### PyPI
-
-```bash
+# Or via PyPI
 pip install feynman-engine
-feynman setup        # builds QGRAF + FORM + LoopTools + LHAPDF + OpenLoops 2 (~10-15 min, one-time)
-feynman doctor       # verify everything is in place
-feynman serve        # launch the API + UI on http://localhost:8000
+feynman setup        # ~10–20 min, builds QGRAF + FORM + LoopTools + LHAPDF + OpenLoops 2
+feynman serve        # http://localhost:8000
 ```
 
-The full `feynman setup` is the recommended path — it gives you generic NLO QCD virtuals (via OpenLoops 2) and percent-level hadronic-σ accuracy (via LHAPDF + CT18LO) out of the box.
-
-For a faster, lighter install (e.g. teaching, CI without `gfortran`):
-
-```bash
-feynman setup --skip-openloops --skip-lhapdf   # ~3 min, drops generic-QCD-NLO + precision PDFs
-```
-
-In skip mode: tabulated NLO K-factors still cover the major LHC channels (DY, tt̄, ggH, WW, ZZ, ZH, VBF), and a built-in LO PDF gives factor-of-2-3 accurate hadronic σ. NLO requests for unregistered QCD processes return HTTP 422 with a hint to install OpenLoops.
-
-Add more OpenLoops process libraries on demand: `feynman install-process pptt`, `feynman install-process pphjj`, etc.
+**See [INSTALLATION.md](INSTALLATION.md) for full instructions** — platform-specific prerequisites (macOS / Debian / WSL), the lightweight install path, doctor verification, and troubleshooting.
 
 For SVG diagram rendering you also need `lualatex` + `pdf2svg` (`brew install basictex pdf2svg` on macOS; `apt-get install texlive-luatex texlive-pictures texlive-science pdf2svg` on Debian/Ubuntu).
 
