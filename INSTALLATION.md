@@ -1,82 +1,63 @@
 # Installation Guide
 
-Three install paths — pick what fits your use case.
+Three install paths. Pick what fits.
 
-| Path | Time | What you get | When to choose |
+| Path | Time | Get | When |
 |---|---|---|---|
 | **Docker** | 1 min | Everything bundled, no build | Easiest. Trying it out, demos. |
-| **Full pip** | 10–20 min | All native HEP tools built locally | Most users; you'll get every feature. |
-| **Lightweight pip** | 3 min | QGRAF + FORM + LoopTools only | Teaching, CI without `gfortran`, fastest install. |
+| **Full pip** | 10-20 min | All native HEP tools built locally | Most users. |
+| **Lightweight pip** | 3 min | QGRAF, FORM, LoopTools only | Teaching, CI, fast install. |
 
----
-
-## Docker (easiest)
+## Docker
 
 ```bash
 docker run -p 8000:8000 ecavan/feynman-api:latest
 # Open http://localhost:8000
 ```
 
-The image bundles QGRAF, FORM, LoopTools, LHAPDF (with CT18LO), OpenLoops 2 (with the `ppllj` process library), and the LaTeX/SVG rendering stack.
+The image bundles QGRAF, FORM, LoopTools, LHAPDF (with CT18LO), OpenLoops 2 (with the `ppllj` process library), and the LaTeX/SVG rendering stack. No system prerequisites beyond Docker. Recommended on Windows.
 
-No system prerequisites needed beyond Docker itself. **Recommended on Windows** — saves you Windows-specific build issues with Fortran toolchains.
-
----
-
-## Full pip install (recommended for native users)
+## Full pip install
 
 ### 1. System prerequisites
 
-You need a Fortran + C/C++ toolchain, plus optional LaTeX for SVG diagram rendering.
+A Fortran and C/C++ toolchain. Optional LaTeX for SVG diagram rendering.
 
-#### macOS
-
+**macOS:**
 ```bash
-# Build toolchain (required)
-brew install gcc make           # gcc package gives you gfortran
-
-# LaTeX + SVG rendering (optional but recommended for diagrams)
-brew install basictex pdf2svg
+brew install gcc make           # the gcc package gives you gfortran
+brew install basictex pdf2svg   # optional, for SVG rendering
 sudo tlmgr update --self
 sudo tlmgr install tikz-feynman standalone
 ```
 
-#### Debian / Ubuntu / WSL
-
+**Debian / Ubuntu / WSL:**
 ```bash
 sudo apt-get update
 sudo apt-get install -y gfortran g++ make python3-dev
-
-# LaTeX + SVG rendering (optional)
 sudo apt-get install -y texlive-luatex texlive-pictures texlive-science pdf2svg
 ```
 
-#### Windows (native)
-
-Native Windows is **not officially supported** for the local-build path because QGRAF + FORM + LoopTools + LHAPDF + OpenLoops are all Fortran/C/C++ projects with Unix-style build systems. Two options:
-
-- **Use Docker** (recommended): see the Docker section above.
-- **Use WSL2** (Windows Subsystem for Linux): install Ubuntu via WSL, then follow the Debian/Ubuntu section above.
+**Windows (native)**: not officially supported because the bundled tools (QGRAF, FORM, LoopTools, LHAPDF, OpenLoops 2) all use Unix build systems. Use Docker or [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) instead.
 
 ### 2. Install + build
 
 ```bash
 pip install feynman-engine
-feynman setup        # ~10–20 min, one-time. Builds QGRAF + FORM + LoopTools + LHAPDF + OpenLoops 2
-feynman doctor       # verify all 5 native deps are 'ok'
-feynman serve        # http://localhost:8000
+feynman setup     # 10-20 min one-time
+feynman doctor    # verify all 5 native deps are 'ok'
+feynman serve     # http://localhost:8000
 ```
 
-`feynman setup` will:
+What `feynman setup` does:
+
 1. Compile QGRAF (Fortran, ~30 s)
 2. Compile FORM (C, ~1 min)
 3. Compile LoopTools (Fortran + C, ~2 min)
-4. Compile LHAPDF (C++, ~3-5 min) and download the CT18LO PDF set (~10 MB)
-5. Compile OpenLoops 2 via SCons (Fortran, ~5-10 min) and download the `ppllj` process library
+4. Compile LHAPDF (C++, ~3-5 min) and download CT18LO (~10 MB)
+5. Compile OpenLoops 2 via SCons (Fortran, ~5-10 min) and download `ppllj`
 
-If any step fails, the recommended `feynman doctor` output points you at the specific install command to retry.
-
----
+If a step fails, `feynman doctor` prints the exact retry command.
 
 ## Lightweight pip install
 
@@ -87,20 +68,12 @@ pip install feynman-engine
 feynman setup --skip-lhapdf --skip-openloops
 ```
 
-You still get:
-- All Feynman diagram generation (QGRAF + FORM)
-- All tree-level amplitudes for QED, QCD, EW, BSM
-- LO cross-sections via scipy/MC
-- Loop amplitudes via the LoopTools backend
-- Tabulated NLO K-factors for major LHC channels (DY, tt̄, ggH, WW, ZZ, ZH, VBF)
-- Universal QED NLO + EW Sudakov NLO closed-form K-factors
-- The browser UI
+You get: all diagram generation, all tree-level amplitudes for all 5 theories, LO cross-sections, loop amplitudes via LoopTools, tabulated NLO K-factors for major LHC channels, universal QED + EW Sudakov NLO, the browser UI.
 
-What you lose:
-- **LHAPDF**: hadronic cross-sections fall back to a built-in LO PDF (factor-of-2-3 accuracy instead of percent-level)
-- **OpenLoops**: NLO σ for unregistered QCD processes returns `HTTP 422` with a workaround
+You miss: LHAPDF (hadronic σ falls back to a built-in LO PDF, factor-of-2-3 accuracy) and OpenLoops (NLO σ for unregistered QCD processes returns HTTP 422 with a workaround).
 
-You can add these later:
+Add them later:
+
 ```bash
 feynman install-lhapdf
 feynman install-pdf-set CT18LO
@@ -108,15 +81,13 @@ feynman install-openloops
 feynman install-process ppllj
 ```
 
----
-
 ## Verifying the install
 
 ```bash
 feynman doctor
 ```
 
-Should report each component as `ok` or `missing`. Example healthy output:
+A healthy install reports:
 
 ```
 FeynmanEngine doctor
@@ -133,37 +104,30 @@ FeynmanEngine doctor
 
 If anything is `missing`, the `Recommendation:` line tells you the exact command to fix it.
 
----
-
 ## Troubleshooting
 
-### `gfortran: command not found`
-- macOS: `brew install gcc` (the Homebrew `gcc` package includes `gfortran`)
-- Debian/Ubuntu: `sudo apt-get install gfortran`
+**`gfortran: command not found`**
+On macOS, run `brew install gcc` (the Homebrew gcc package includes gfortran). On Debian/Ubuntu: `sudo apt-get install gfortran`.
 
-### `feynman setup` hangs on OpenLoops download
-The OpenLoops `ppllj` process library is downloaded from openloops.hepforge.org during setup. If it hangs:
-- Check internet access
-- Re-run with `feynman install-openloops --no-process` to skip the download
-- Manually install later: `feynman install-process ppllj`
+**`feynman setup` hangs on the OpenLoops download.**
+The `ppllj` process library is downloaded from openloops.hepforge.org during setup. Check your internet connection. To skip the download and install the library later: `feynman install-openloops --no-process`, then `feynman install-process ppllj`.
 
-### `feynman doctor` reports `LoopTools: missing` but `gfortran` is installed
-LoopTools requires `gfortran` and a working `make`. On macOS the Apple `gcc` is actually clang (no Fortran). Install Homebrew's gcc package: `brew install gcc`.
+**`feynman doctor` reports `LoopTools: missing` but `gfortran` is installed.**
+LoopTools needs both gfortran and make. On macOS, Apple's `gcc` is actually clang and has no Fortran. Install Homebrew gcc: `brew install gcc`.
 
-### `lualatex: command not found` (SVG rendering missing)
-SVG diagram rendering requires `lualatex` + `pdf2svg`. The engine still works without these — you just don't get rendered diagrams (the TikZ source is always returned).
+**`lualatex: command not found`.**
+SVG diagram rendering needs `lualatex` and `pdf2svg`. The engine still works without these (the TikZ source is always returned), you just lose rendered SVGs.
 
-### Anything else
-File an issue at https://github.com/ecavan/FeynmanAPI/issues with the output of `feynman doctor` attached.
-
----
+**Anything else.** File an issue at https://github.com/ecavan/FeynmanAPI/issues with the output of `feynman doctor` attached.
 
 ## Upgrading
 
 ```bash
 pip install --upgrade feynman-engine
-# Native binaries built by `feynman setup` are NOT recompiled on package upgrade.
-# If a major version bumps a bundled tool (QGRAF, FORM, LoopTools, LHAPDF,
-# OpenLoops), re-run:
+```
+
+Native binaries built by `feynman setup` are not recompiled on a package upgrade. If a major version bumps a bundled tool (QGRAF, FORM, LoopTools, LHAPDF, OpenLoops), re-run:
+
+```bash
 feynman setup --force
 ```
