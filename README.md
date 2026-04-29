@@ -1,7 +1,9 @@
 # FeynmanEngine
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19673075.svg)](https://doi.org/10.5281/zenodo.19673075)
-[![PyPI](https://img.shields.io/pypi/v/feynman-engine)](https://pypi.org/project/feynman-engine/)
+[![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/)
+[![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/)
+[![License](https://img.shields.io/pypi/l/feynman-engine?cacheSeconds=300)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19673075.svg?v=0.1.4)](https://doi.org/10.5281/zenodo.19673075)
 
 A Feynman diagram generator and amplitude calculator for particle physics. Give it a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams as SVG/TikZ, the symbolic spin-averaged |M|^2, integrated cross-sections (LO and NLO), and --- for standard processes --- numerically evaluated 1-loop results via LoopTools.
 
