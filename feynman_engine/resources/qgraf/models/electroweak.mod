@@ -1,0 +1,85 @@
+% Standard Model Electroweak model file for QGRAF
+% Full SM gauge sector: leptons, quarks, gamma, Z, W+/-, H
+
+% Propagators: [field, dual-field, sign]
+% Leptons
+[em, ep, -]
+[mum, mup, -]
+[taum, taup, -]
+[nue, nuea, -]
+[numu, numua, -]
+[nutau, nutaua, -]
+% Quarks
+[uq, ua, -]
+[dq, da, -]
+[sq, sa, -]
+[cq, ca, -]
+[bq, ba, -]
+[tq, ta, -]
+% Gauge bosons
+[A, A, +]
+[Z, Z, +]
+[Wp, Wm, +]
+% Higgs
+[H, H, +]
+
+% Vertices
+% QED-like photon couplings
+[em, ep, A]
+[mum, mup, A]
+[taum, taup, A]
+[uq, ua, A]
+[dq, da, A]
+[sq, sa, A]
+[cq, ca, A]
+[bq, ba, A]
+[tq, ta, A]
+% Z couplings
+[em, ep, Z]
+[mum, mup, Z]
+[taum, taup, Z]
+[nue, nuea, Z]
+[numu, numua, Z]
+[nutau, nutaua, Z]
+[uq, ua, Z]
+[dq, da, Z]
+[sq, sa, Z]
+[cq, ca, Z]
+[bq, ba, Z]
+[tq, ta, Z]
+% W couplings (charged current)
+% Leptons
+[em, nuea, Wp]
+[nue, ep, Wm]
+[mum, numua, Wp]
+[numu, mup, Wm]
+[taum, nutaua, Wp]
+[nutau, taup, Wm]
+% Quarks (Wp/Wm swapped for W propagator pairing)
+[uq, da, Wm]
+[dq, ua, Wp]
+[cq, sa, Wm]
+[sq, ca, Wp]
+[tq, ba, Wm]
+[bq, ta, Wp]
+% Gauge self-couplings
+[Wp, Wm, A]
+[Wp, Wm, Z]
+[Wp, Wm, A, A]
+[Wp, Wm, Z, Z]
+[Wp, Wm, Z, A]
+[Wp, Wp, Wm, Wm]
+% Higgs couplings
+[H, Z, Z]
+[H, Wp, Wm]
+[H, H, Z, Z]
+[H, H, Wp, Wm]
+[H, H, H]
+[H, H, H, H]
+% Yukawa (heavy flavors only)
+[em, ep, H]
+[mum, mup, H]
+[taum, taup, H]
+[tq, ta, H]
+[bq, ba, H]
+[cq, ca, H]

@@ -23,9 +23,12 @@ bin/form
 *.log
 *.aux
 
-# QGRAF output .mod files (but not our model files in contrib/qgraf/models/)
+# QGRAF-output .mod files only — our hand-written model files in
+# contrib/qgraf/models/ AND feynman_engine/resources/qgraf/models/ are
+# explicitly tracked (the latter ships in the pip wheel).
 *.mod
 !contrib/qgraf/models/*.mod
+!feynman_engine/resources/qgraf/models/*.mod
 
 # Secrets / local config
 .env
