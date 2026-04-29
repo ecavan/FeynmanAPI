@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "feynman-engine"
-version = "0.1.1"
-description = "Feynman diagram engine wrapping QGRAF and TikZ-Feynman"
+version = "0.1.2"
+description = "Feynman diagram generator + amplitude/cross-section calculator wrapping QGRAF, FORM, LoopTools, OpenLoops, and LHAPDF"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     { name = "Elijah Cavan" },
 ]
 dependencies = [
+    "numpy>=1.26",
     "networkx>=3.2",
     "pydantic>=2.5",
     "jinja2>=3.1",
@@ -40,6 +41,11 @@ dev = [
 # to the built-in LO-simple parametrization automatically.
 lhapdf = [
     "lhapdf>=6.5",
+]
+# Optional Vegas adaptive Monte Carlo (Lepage) for high-multiplicity NLO
+# real-emission integration.  Without it the engine uses flat RAMBO MC.
+vegas = [
+    "vegas>=6.0",
 ]
 
 [project.scripts]

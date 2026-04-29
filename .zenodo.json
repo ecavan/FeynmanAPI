@@ -1,6 +1,6 @@
 {
   "title": "FeynmanEngine",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "upload_type": "software",
   "access_right": "open",
   "license": "gpl-3.0-only",
@@ -11,7 +11,7 @@
       "type": "Personal"
     }
   ],
-  "description": "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service.",
+  "description": "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction, OpenLoops virtuals, EW Sudakov LL+NLL), differential observables, and PDF-convolved hadronic predictions.",
   "related_identifiers": [
     {
       "identifier": "10.1103/PhysRev.76.769",
@@ -62,6 +62,31 @@
       "identifier": "10.1016/j.cpc.2016.10.013",
       "relation": "cites",
       "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/1007.4716",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/0711.3596",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/S0550-3213(96)00589-5",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/hep-ph/0312266",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/0550-3213(95)00379-7",
+      "relation": "cites",
+      "resource_type": "publication-article"
     }
   ],
   "keywords": [
@@ -74,6 +99,8 @@
     "looptools",
     "openloops",
     "lhapdf",
+    "catani-seymour",
+    "ew sudakov",
     "parton distribution functions",
     "fastapi"
   ]

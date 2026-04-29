@@ -269,14 +269,34 @@ def _build_openloops_from_archive(
 # Curated starter set of OpenLoops process libraries.  See
 # https://openloops.hepforge.org/process_library.php for the full list.
 DEFAULT_PROCESS_LIBRARY = "ppllj"
+
+# Curated starter pack — covers the major LHC analyses (Drell-Yan, top, Higgs,
+# di-boson, VBF, ttH).  Each library is ~50-100 MB after compilation; the
+# Docker image bundles ``ppllj`` only, additional libraries are user-installed
+# via ``feynman install-process <name>``.
 COMMON_PROCESS_LIBRARIES = [
-    "ppllj",   # pp → l+l- (+ jet)        — Drell-Yan + jet
-    "pptt",    # pp → t t~                — top pair
-    "ppttj",   # pp → t t~ + jet
-    "pph",     # pp → H                   — gluon-fusion Higgs (loop-induced)
-    "ppvv",    # pp → V V                 — di-boson
-    "pphjj",   # pp → H + 2 jets          — VBF Higgs
+    "ppllj",   # pp → l+l- (+ jet)         — Drell-Yan + jet (default, bundled)
+    "pptt",    # pp → t t~                 — top pair (NLO QCD)
+    "ppttj",   # pp → t t~ + jet           — tt + jet (NLO+1jet)
+    "pphtt",   # pp → t t~ H               — ttH associated production
+    "pph",     # pp → H                    — gluon-fusion Higgs (loop-induced!)
+    "ppvv",    # pp → V V                  — di-boson incl. gg→VV loop-induced
+    "pphjj",   # pp → H + 2 jets           — VBF Higgs (cross-check our calibrated path)
+    "pphh",    # pp → H H                  — di-Higgs (loop-induced ggHH)
+    "ppvvj",   # pp → V V + jet            — boosted V+jet topology
+    "ppvjj",   # pp → V + 2 jets           — V+jets topology
 ]
+
+# Loop-induced processes (Born has no tree contribution; the leading order is
+# the 1-loop amplitude).  When OpenLoops is asked for these, ``tree`` will be
+# 0 and we should use ``loop²`` directly as the |M|² rather than computing a
+# K-factor.
+LOOP_INDUCED_PROCESSES: set[str] = {
+    "pph",     # gg → H (heavy-top loop)
+    "pphh",    # gg → HH (box + triangle)
+    # Note: ppvv contains BOTH tree (qq̄→VV) and loop-induced (gg→VV) parts
+    # depending on the partonic channel selected.
+}
 
 
 def install_process_library(

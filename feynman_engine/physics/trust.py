@@ -328,6 +328,33 @@ def _probe_amplitude_trust(process: str, theory: str, order: str) -> TrustEntry:
         )
 
     if order.upper() == "NLO":
+        # V2.7: QED has a universal NLO K-factor (charge-correlator formula),
+        # and EW has the Sudakov LL+NLL framework — both routed through
+        # nlo_cross_section() with explicit "approximate" trust.
+        if theory.upper() == "QED":
+            return TrustEntry(
+                TrustLevel.APPROXIMATE,
+                reference="V2.7.B universal QED NLO via Σ Q² charge-correlator.",
+                accuracy_caveat=(
+                    "QED NLO via the universal K = 1 + (α/(4π)) Σ Q² × C_universal "
+                    "formula.  Reproduces 1+3α/(4π) exactly for e+e-→ll'.  "
+                    "For quark-containing or W-containing processes the formula "
+                    "captures only the leading inclusive correction (~0.2%); "
+                    "QCD effects dominate at LHC scales."
+                ),
+            )
+        if theory.upper() == "EW":
+            return TrustEntry(
+                TrustLevel.APPROXIMATE,
+                reference="V2.7.A EW Sudakov LL+NLL.",
+                accuracy_caveat=(
+                    "EW NLO via the universal Sudakov K = 1 - (α/(4π sin²θ_W)) "
+                    "Σ T_eff² × {L² + 3L} with L = log(s/M_W²).  Captures the "
+                    "dominant negative correction at √s ≫ M_W.  Finite EW "
+                    "(vertex, mass-shift, γ-Z mixing) corrections are NOT "
+                    "included; they typically add ~1% per leg."
+                ),
+            )
         return TrustEntry(
             TrustLevel.BLOCKED,
             reference="No tabulated NLO K-factor for this process.",

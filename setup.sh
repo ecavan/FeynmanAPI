@@ -108,7 +108,30 @@ else
   fi
 fi
 
-# 7. Verify Python packages
+# 7. OpenLoops (recommended: enables generic NLO QCD virtuals for any process)
+# Skip when SKIP_OPENLOOPS=1.
+echo ""
+echo "--- OpenLoops 2 (generic NLO QCD virtuals) ---"
+if [ -n "$SKIP_OPENLOOPS" ]; then
+  echo "Skipped (SKIP_OPENLOOPS set)."
+elif [ -d /tmp/ol-build ] || [ -d /opt/openloops ] || [ -d ~/.local/openloops ]; then
+  echo "✓ OpenLoops install found (auto-discovered by feynman_engine)"
+else
+  echo "OpenLoops not installed. Building from bundled source archive..."
+  echo "(This compiles Fortran via SCons — takes 5-10 minutes.)"
+  if python -m feynman_engine install-openloops; then
+    echo "✓ Built OpenLoops + installed default ppllj process library"
+    echo "  → generic NLO QCD virtuals now available for any SM process"
+  else
+    echo "⚠ Unable to build OpenLoops automatically."
+    echo "  Without it, NLO σ for unregistered QCD processes will be BLOCKED;"
+    echo "  the tabulated K-factors for major LHC channels still work."
+    echo "  Ensure gfortran, scons, and a C++ compiler are installed."
+    echo "  Re-run later with: python -m feynman_engine install-openloops"
+  fi
+fi
+
+# 8. Verify Python packages
 echo ""
 echo "--- Python packages ---"
 python -c "import networkx; print('✓ networkx', networkx.__version__)"

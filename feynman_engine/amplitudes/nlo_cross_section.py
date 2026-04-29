@@ -324,10 +324,52 @@ def _classify_process(process: str, theory: str) -> dict:
                 ),
             }
 
+    # --- V2.7.B: Universal QED NLO via charge-correlator formula ---
+    if theory_up == "QED":
+        from feynman_engine.amplitudes.nlo_qed_general import qed_nlo_kfactor
+        qed_res = qed_nlo_kfactor(process.strip(), theory=theory_up)
+        if qed_res.k_factor != 1.0 or qed_res.n_charged_legs > 0:
+            return {
+                "supported": True,
+                "nlo_method": "qed-universal-kfactor",
+                "k_factor": qed_res.k_factor,
+                "coupling": coupling,
+                "coupling_power": coupling_power,
+                "n_out": n_out,
+                "incoming": incoming,
+                "outgoing": outgoing,
+                "trust_level": qed_res.trust_level,
+                "accuracy_caveat": qed_res.accuracy_caveat,
+                "description": (
+                    f"Universal QED NLO K = 1 + (α/(4π)) × Σ Q² × C_universal "
+                    f"= {qed_res.k_factor:.6f}.  {qed_res.notes}"
+                ),
+            }
+
+    # --- V2.7.A: Universal EW NLO via Sudakov LL+NLL ---
+    if theory_up == "EW":
+        from feynman_engine.amplitudes.nlo_ew_general import ew_nlo_sudakov_kfactor
+        sudakov = ew_nlo_sudakov_kfactor(process.strip(), sqrt_s_gev=91.2)
+        # Re-evaluated at requested √s in nlo_cross_section() below
+        return {
+            "supported": True,
+            "nlo_method": "ew-sudakov-LL-NLL",
+            "k_factor": sudakov.k_factor,        # placeholder; rebuilt at known √s
+            "coupling": coupling,
+            "coupling_power": coupling_power,
+            "n_out": n_out,
+            "incoming": incoming,
+            "outgoing": outgoing,
+            "trust_level": sudakov.trust_level,
+            "accuracy_caveat": sudakov.accuracy_caveat,
+            "description": (
+                "EW Sudakov leading + next-to-leading log K-factor; "
+                "K = 1 - (α/(4π sin²θ_W)) Σ T_eff² × {L² + 3L}, "
+                "L = log(s/M_W²)."
+            ),
+        }
+
     # --- No exact K-factor available ---
-    # We used to fall back to a running-coupling rescaling here, but that gave
-    # users a number with unjustified precision (leading-log only, missing
-    # vertex/box/real-emission).  Per V1 trust-system policy, BLOCKED.
     return {
         "supported": False,
         "error": (
@@ -494,12 +536,21 @@ def nlo_cross_section(
     sigma_born_err_pb = born_result.get("sigma_uncertainty_pb", 0.0)
 
     # ── Step 2: Compute K-factor ──────────────────────────────────────────
-    # Only exact analytic K-factors are supported here.  For all other
-    # processes _classify_process() returns supported=False and we never
-    # reach this branch.
+    # Exact analytic K-factor (QED 2→2 textbook), universal QED via
+    # charge-correlator formula, or universal EW Sudakov LL+NLL.
     s = sqrt_s ** 2
     k_factor = info["k_factor"]
-    method_label = "analytic-kfactor"
+    # Map internal classifier label → user-facing method label.
+    _METHOD_LABEL_MAP = {"exact-kfactor": "analytic-kfactor"}
+    raw_method = info.get("nlo_method", "analytic-kfactor")
+    method_label = _METHOD_LABEL_MAP.get(raw_method, raw_method)
+
+    # For EW Sudakov, the K-factor must be re-evaluated at the actual √s
+    # (the classifier uses a placeholder).
+    if method_label == "ew-sudakov-LL-NLL":
+        from feynman_engine.amplitudes.nlo_ew_general import ew_nlo_sudakov_kfactor
+        sudakov = ew_nlo_sudakov_kfactor(process.strip(), sqrt_s_gev=sqrt_s)
+        k_factor = sudakov.k_factor
 
     sigma_nlo_pb = sigma_born_pb * k_factor
     delta_nlo_pb = sigma_nlo_pb - sigma_born_pb
@@ -520,6 +571,10 @@ def nlo_cross_section(
         "sigma_uncertainty_pb": sigma_nlo_err_pb,
         "supported": True,
     }
+    if "trust_level" in info:
+        result["trust_level"] = info["trust_level"]
+    if info.get("accuracy_caveat"):
+        result["accuracy_caveat"] = info["accuracy_caveat"]
 
     if n_out > 2:
         result["n_final_state"] = n_out

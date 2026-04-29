@@ -432,11 +432,11 @@ def test_box_coefficient_not_unity():
     assert box_checked, "No box diagram found for e+e-→μ+μ- at 1-loop"
 
 
-def test_loop_curated_has_20_entries():
-    """Curated 1-loop registry now has 20 entries."""
+def test_loop_curated_has_at_least_30_entries():
+    """Curated 1-loop registry has at least 30 entries (V2.7: 35)."""
     from feynman_engine.amplitudes.loop_curated import get_loop_curated_results
     results = get_loop_curated_results()
-    assert len(results) == 20, f"Expected 20 curated 1-loop entries, got {len(results)}"
+    assert len(results) >= 30, f"Expected ≥30 curated 1-loop entries, got {len(results)}"
 
 
 def test_arbitrary_process_tree_amplitude():

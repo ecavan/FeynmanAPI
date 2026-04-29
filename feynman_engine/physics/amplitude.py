@@ -874,31 +874,39 @@ def _ew_z_to_ffbar() -> AmplitudeResult:
     )
 
 
-def _ew_w_to_enu() -> AmplitudeResult:
-    """W⁻ → e⁻ ν̄ₑ (or W⁺ → e⁺ νₑ) leptonic decay.
+def _ew_w_to_lnu(charge: str, flavor: str) -> AmplitudeResult:
+    """W± → ℓ± ν leptonic decay (massless lepton limit).
 
     The W couples to left-handed fermions via (g_W/√2) γ^μ (1-γ⁵)/2.
-    Spin-summed |M|² (massless leptons):
-        Σ|M|² = g_W² × (q₁·q₂) = g_W² × m_W²/2
+    Full V-A trace with W spin-sum Σ ε ε* = -g + p p / m_W²:
 
-    Spin-averaged (2J+1 = 3):
-        |M̄|² = g_W² m_W² / 6
+        Σ|M|² (sum over W spins, sum over lepton spins) = g_W² m_W²
+        |M̄|²  (spin-AVERAGED over W, ×1/3)             = g_W² m_W² / 3
 
-    Partial width: Γ(W→eν) = g_W² m_W / (48π) = G_F m_W³ / (6π√2)
+    Partial width: Γ(W→ℓν) = g_W² m_W / (48π) = G_F m_W³ / (6π√2) ≈ 226 MeV.
 
-    Ref: Grozin "Lectures on QED and QCD" §6; Peskin & Schroeder problem 20.1.
+    Registered for both charge variants (W+ → ℓ+ ν, W- → ℓ- ν~) and
+    all three lepton flavors so the lookup-by-exact-string in the
+    curated registry succeeds regardless of how the user writes the process.
+
+    Ref: Schwartz "QFT and the SM" §29.2; Grozin "Lectures on QED and QCD" §6.
     """
-    msq = g_W**2 * m_W**2 / 6
+    msq = g_W**2 * m_W**2 / 3
+    if charge == "+":
+        proc = f"W+ -> {flavor}+ nu_{flavor}"
+    else:
+        proc = f"W- -> {flavor}- nu_{flavor}~"
     return AmplitudeResult(
-        process="W- -> e- nu_e~",
+        process=proc,
         theory="EW",
         msq=msq,
         msq_latex=latex(msq),
-        description="W leptonic decay (massless lepton limit)",
+        description=f"W leptonic decay W{charge} → {flavor}{charge} ν (massless lepton)",
         notes=(
-            "Γ(W→eν) = g_W² m_W/(48π) = G_F m_W³/(6π√2). "
-            "Universal for all lepton generations. "
-            "Ref: Grozin; P&S problem 20.1."
+            f"Γ(W→{flavor}ν) = g_W² m_W/(48π) = G_F m_W³/(6π√2) ≈ 226 MeV. "
+            "V-A spin-averaged with W polarization sum -g_{μν} + p_μp_ν/m_W². "
+            "Universal across lepton generations in the massless limit. "
+            "Ref: Schwartz §29.2."
         ),
         backend="curated",
     )
@@ -907,16 +915,13 @@ def _ew_w_to_enu() -> AmplitudeResult:
 def _ew_w_to_qq() -> AmplitudeResult:
     """W → qi q̄j hadronic decay (massless quarks, CKM diagonal).
 
-    Same as leptonic but with N_c = 3 colour factor and CKM mixing:
-        Γ(W→qq̄) = N_c × |V_ij|² × g_W² m_W / (48π)
+    Same V-A trace as leptonic, multiplied by N_c = 3 colour factor:
+        |M̄|² (colour-summed, spin-averaged over W) = N_c × g_W² m_W² / 3
 
-    For a single colour-summed quark channel (|V_ij|=1):
-        |M̄|² = g_W² m_W² / 6  (same as leptonic, per colour)
-
-    Total hadronic: sum over accessible channels × N_c.
-    Ref: Grozin.
+    Partial width per channel: Γ(W→qq̄) = N_c × |V_ij|² × g_W² m_W / (48π).
+    Ref: Schwartz §29.2.
     """
-    msq = g_W**2 * m_W**2 / 6
+    msq = 3 * g_W**2 * m_W**2 / 3   # N_c × g_W² m_W² / 3
     return AmplitudeResult(
         process="W- -> d u~",
         theory="EW",
@@ -924,8 +929,8 @@ def _ew_w_to_qq() -> AmplitudeResult:
         msq_latex=latex(msq),
         description="W hadronic decay to quark pair (massless, CKM diagonal)",
         notes=(
-            "Same structure as leptonic decay. Multiply by N_c=3 for total rate. "
-            "CKM mixing: multiply by |V_ij|². Ref: Grozin."
+            "V-A trace × N_c=3 (colour summed). Multiply by |V_ij|² for CKM. "
+            "Ref: Schwartz §29.2."
         ),
         backend="curated",
     )
@@ -1848,7 +1853,13 @@ def _build_curated() -> None:
         *[_ew_ee_to_ll_neutral_current(l) for l in ("e", "mu", "tau")],
         # EW decays
         _ew_z_to_ffbar(),
-        _ew_w_to_enu(),
+        # All W± → ℓ± ν charge×flavor variants (6 entries) so the
+        # exact-string lookup matches user requests like "W+ -> mu+ nu_mu"
+        # without falling through to the form-decay backend (which spin-
+        # averages incorrectly and gives Γ ≈ 4× the V-A textbook value).
+        *[_ew_w_to_lnu(charge, flavor)
+          for charge in ("+", "-")
+          for flavor in ("e", "mu", "tau")],
         _ew_w_to_qq(),
         _ew_h_to_ffbar(),
         _ew_h_to_ww(),
@@ -2062,9 +2073,22 @@ def get_best_effort_loop_amplitude(
     theory: str = "QED",
     loops: int = 1,
 ) -> Optional[AmplitudeResult]:
-    """Return the best available loop-level |M|² estimate for a process."""
-    from feynman_engine.amplitudes.loop import get_loop_amplitude
+    """Return the best available loop-level |M|² estimate for a process.
 
+    Priority order:
+      1. Curated 1-loop registry (exact closed form for loop-induced
+         processes like H → γγ, g g → H, where QGRAF has no tree-level
+         diagram to start from).
+      2. QGRAF + Passarino-Veltman reduction for processes that have a
+         tree-level diagram and exist in the QGRAF model files.
+    """
+    if loops == 1:
+        from feynman_engine.amplitudes.loop_curated import get_loop_curated_amplitude
+        curated = get_loop_curated_amplitude(process, theory)
+        if curated is not None and curated.msq not in (None, 0):
+            return curated
+
+    from feynman_engine.amplitudes.loop import get_loop_amplitude
     exact_like = get_loop_amplitude(process, theory, loops=loops)
     if exact_like is not None and exact_like.msq not in (None, 0):
         return exact_like

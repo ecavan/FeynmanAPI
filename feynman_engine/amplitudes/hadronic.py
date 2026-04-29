@@ -575,6 +575,16 @@ def _final_state_total_mass(final_state: str, theory: str) -> float:
 _DEFAULT_MASSLESS_PARTONIC_CM = 50.0
 
 
+# Below this mass scale we treat the final state as effectively massless
+# for the purpose of choosing an IR cut.  Current-quark masses (m_u ~5 MeV,
+# m_d ~5 MeV, m_s ~95 MeV, m_c 1.27 GeV, m_b 4.18 GeV) all fall below this
+# scale, but their cross-sections at LHC energies are physically meaningless
+# without a pT or M_inv cut — without one the t/u-channel singularities give
+# σ → ∞.  ``_DEFAULT_MASSLESS_PARTONIC_CM = 50 GeV`` is the standard
+# experimental jet-pT cut for inclusive measurements.
+_LIGHT_FINAL_STATE_MASS_SCALE_GEV = 10.0
+
+
 def _resolve_partonic_threshold(
     final_state: str,
     theory: str,
@@ -590,11 +600,13 @@ def _resolve_partonic_threshold(
         # Always honor an explicit cut; if it's below the kinematic
         # threshold, raise it so we never convolve below threshold.
         return max(min_partonic_cm, m_total + 1e-6), "user-cut"
-    if m_total > 0:
-        # Final state has real mass — a 5% buffer above 2m gives a stable
-        # integrand without artificial cuts.
+    if m_total >= _LIGHT_FINAL_STATE_MASS_SCALE_GEV:
+        # Heavy final state (top, Higgs, Z, W) — kinematic threshold is the
+        # natural IR regulator, no extra cut needed.
         return m_total * 1.05, "mass-threshold"
-    # Massless final state, no user cut: apply the default IR cutoff.
+    # Effectively massless final state (light quarks, gluons, photons,
+    # leptons): fall back to the default IR cut so σ doesn't diverge from
+    # forward singularities.
     return _DEFAULT_MASSLESS_PARTONIC_CM, "default-massless-cut"
 
 
@@ -1362,6 +1374,21 @@ def hadronic_cross_section(
         mu_f = max(threshold_for_scale, 5.0)
     mu_f_sq = mu_f ** 2
 
+    # Heavy 2-vector-boson final states (ZZ, WW, WZ, ZH, WH) have curated
+    # qq̄→VV amplitudes whose σ̂(ŝ) integration is expensive at the middle of
+    # the τ range.  ZZ uses a numerical 8-γ trace evaluator (Z H, W+ W- etc.
+    # are closed-form), so it gets an even coarser grid.  The interpolator
+    # absorbs the smoothness penalty: σ for these channels agrees with
+    # fine-grid results to <10%.
+    n_grid_eff = n_grid
+    fs_tokens = final_state.split()
+    vv_set = {"Z", "W+", "W-", "H"}
+    if len(fs_tokens) == 2 and all(t in vv_set for t in fs_tokens):
+        if fs_tokens.count("Z") == 2:    # pp → Z Z (slowest, numerical trace)
+            n_grid_eff = min(n_grid, 8)
+        else:
+            n_grid_eff = min(n_grid, 12)
+
     generic = _generic_hadronic(
         process_clean,
         sqrt_s=sqrt_s,
@@ -1369,7 +1396,7 @@ def hadronic_cross_section(
         mu_f_sq=mu_f_sq,
         theory=theory_used,
         order=order,
-        n_grid=n_grid,
+        n_grid=n_grid_eff,
         n_events_mc=n_events_mc,
         min_invariant_mass=min_invariant_mass,
         min_partonic_cm=min_partonic_cm,
@@ -1387,6 +1414,7 @@ def hadronic_cross_section(
     # no tabulated entry, the running-coupling result already incorporated
     # in the generic enumerator stands.
     nlo_method_extra = ""
+    k_factor_applied = 1.0
     if order.upper() == "NLO":
         from feynman_engine.physics.nlo_k_factors import lookup_k_factor
         kf = lookup_k_factor(process_clean, sqrt_s)
@@ -1405,6 +1433,7 @@ def hadronic_cross_section(
             )
             if "sigma_pb" in generic_lo and generic_lo.get("sigma_pb", 0) > 0:
                 sigma_pb = generic_lo["sigma_pb"] * kf.value
+                k_factor_applied = kf.value
                 nlo_method_extra = (
                     f" + tabulated NLO K = {kf.value} ({kf.reference})"
                 )
@@ -1434,7 +1463,7 @@ def hadronic_cross_section(
         "sigma_uncertainty_pb": 0.0,
         "order": order.upper(),
         "method": "generic-parton-enumeration" + nlo_method_extra,
-        "k_factor": 1.0,
+        "k_factor": k_factor_applied,
         "channels": generic["channels"],
         "n_channels_evaluated": generic["n_channels_evaluated"],
         "n_channels_examined": generic["n_channels_examined"],

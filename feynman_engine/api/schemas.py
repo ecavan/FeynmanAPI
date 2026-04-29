@@ -120,6 +120,27 @@ class CrossSectionResponse(BaseModel):
     supported: bool
 
 
+class DecayWidthResponse(BaseModel):
+    process: str
+    theory: str
+    parent: str
+    daughters: list[str]
+    parent_mass_gev: float
+    daughter_masses_gev: list[float]
+    msq_value: float
+    msq_latex: str
+    width_gev: float
+    width_mev: float
+    branching_ratio: Optional[float] = None  # Γ_partial / Γ_total when known
+    pdg_width_mev: Optional[float] = None
+    pct_off_pdg: Optional[float] = None
+    backend: Optional[str] = None
+    notes: str = ""
+    trust_level: str = "approximate"
+    trust_reference: Optional[str] = None
+    accuracy_caveat: Optional[str] = None
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None

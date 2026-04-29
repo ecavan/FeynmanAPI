@@ -66,14 +66,21 @@
           </div>
 
           <div class="example-group" data-theory="QED">
-            <div class="example-group-label">1-Loop</div>
+            <div class="example-group-label">1-Loop Scattering</div>
             <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="QED" data-loops="1">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag ex-tag-loop">VP + vertex + box</span></button>
             <button class="example-btn" data-process="e+ e- -> e+ e-" data-theory="QED" data-loops="1">e⁺e⁻ → e⁺e⁻ <span class="ex-tag ex-tag-loop">Bhabha VP</span></button>
             <button class="example-btn" data-process="e- e- -> e- e-" data-theory="QED" data-loops="1">e⁻e⁻ → e⁻e⁻ <span class="ex-tag ex-tag-loop">Møller VP</span></button>
             <button class="example-btn" data-process="e- gamma -> e- gamma" data-theory="QED" data-loops="1">e⁻γ → e⁻γ <span class="ex-tag ex-tag-loop">Compton VP</span></button>
             <button class="example-btn" data-process="e+ e- -> gamma gamma" data-theory="QED" data-loops="1">e⁺e⁻ → γγ <span class="ex-tag ex-tag-loop">annihil. VP</span></button>
             <button class="example-btn" data-process="gamma gamma -> e+ e-" data-theory="QED" data-loops="1">γγ → e⁺e⁻ <span class="ex-tag ex-tag-loop">pair prod. VP</span></button>
+            <button class="example-btn" data-process="gamma gamma -> gamma gamma" data-theory="QED" data-loops="1">γγ → γγ <span class="ex-tag ex-tag-loop">light-by-light</span></button>
+            <button class="example-btn" data-process="e+ e- -> t t~" data-theory="QED" data-loops="1">e⁺e⁻ → tt̄ <span class="ex-tag ex-tag-loop">QED box</span></button>
           </div>
+
+          <!-- Self-energies & vertex form factors are not 2→N scattering
+               processes; they live in the loop-curated registry and can be
+               viewed via the /api/amplitude/loop-curated endpoint. -->
+
 
           <!-- ══════════════════ QCD ══════════════════ -->
           <div class="example-group" data-theory="QCD">
@@ -109,12 +116,18 @@
           </div>
 
           <div class="example-group" data-theory="QCD">
-            <div class="example-group-label">1-Loop</div>
+            <div class="example-group-label">1-Loop Scattering</div>
             <button class="example-btn" data-process="u u~ -> g g" data-theory="QCD" data-loops="1">uū → gg <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
             <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="1">gg → gg <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
             <button class="example-btn" data-process="u g -> u g" data-theory="QCD" data-loops="1">ug → ug <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
             <button class="example-btn" data-process="g g -> u u~" data-theory="QCD" data-loops="1">gg → uū <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
+            <button class="example-btn" data-process="q q~ -> g g" data-theory="QCD" data-loops="1">qq̄ → gg full <span class="ex-tag ex-tag-loop">Catani 1996</span></button>
           </div>
+
+          <!-- QCD self-energies, vertices, DGLAP kernels and α_s 2-loop are
+               in the loop-curated registry (browsable via the API);
+               omitted here since they aren't 2→N scattering processes. -->
+
 
           <!-- ══════════════════ QCD+QED ══════════════════ -->
           <div class="example-group" data-theory="QCDQED">
@@ -140,6 +153,10 @@
             <button class="example-btn" data-process="W+ -> e+ nu_e" data-theory="EW" data-loops="0">W⁺ → e⁺νₑ <span class="ex-tag ex-tag-decay">1→2</span></button>
             <button class="example-btn" data-process="W+ -> mu+ nu_mu" data-theory="EW" data-loops="0">W⁺ → μ⁺νμ <span class="ex-tag ex-tag-decay">1→2</span></button>
             <button class="example-btn" data-process="W+ -> tau+ nu_tau" data-theory="EW" data-loops="0">W⁺ → τ⁺ντ <span class="ex-tag ex-tag-decay">1→2</span></button>
+            <button class="example-btn" data-process="W- -> e- nu_e~" data-theory="EW" data-loops="0">W⁻ → e⁻ν̄ₑ <span class="ex-tag ex-tag-decay">1→2</span></button>
+            <button class="example-btn" data-process="W- -> mu- nu_mu~" data-theory="EW" data-loops="0">W⁻ → μ⁻ν̄μ <span class="ex-tag ex-tag-decay">1→2</span></button>
+            <button class="example-btn" data-process="W- -> tau- nu_tau~" data-theory="EW" data-loops="0">W⁻ → τ⁻ν̄τ <span class="ex-tag ex-tag-decay">1→2</span></button>
+            <button class="example-btn" data-process="W- -> d u~" data-theory="EW" data-loops="0">W⁻ → du̅ <span class="ex-tag ex-tag-decay">hadronic</span></button>
           </div>
 
           <div class="example-group" data-theory="EW">
@@ -163,7 +180,35 @@
           <div class="example-group" data-theory="EW">
             <div class="example-group-label">Drell-Yan & Neutrino</div>
             <button class="example-btn" data-process="u d~ -> e+ nu_e" data-theory="EW" data-loops="0">ud̄ → e⁺νₑ <span class="ex-tag">CC DY</span></button>
+            <button class="example-btn" data-process="u d~ -> W+ gamma" data-theory="EW" data-loops="0">ud̄ → W⁺γ <span class="ex-tag">radiative DY</span></button>
             <button class="example-btn" data-process="e- nu_mu -> mu- nu_e" data-theory="EW" data-loops="0">e⁻νμ → μ⁻νₑ <span class="ex-tag">ν scat.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">qq̄ → ZH (associated)</div>
+            <button class="example-btn" data-process="u u~ -> Z H" data-theory="EW" data-loops="0">uū → ZH <span class="ex-tag">u-channel</span></button>
+            <button class="example-btn" data-process="d d~ -> Z H" data-theory="EW" data-loops="0">dd̄ → ZH <span class="ex-tag">d-channel</span></button>
+            <button class="example-btn" data-process="c c~ -> Z H" data-theory="EW" data-loops="0">cc̄ → ZH <span class="ex-tag">c-channel</span></button>
+            <button class="example-btn" data-process="s s~ -> Z H" data-theory="EW" data-loops="0">ss̄ → ZH <span class="ex-tag">s-channel</span></button>
+            <button class="example-btn" data-process="b b~ -> Z H" data-theory="EW" data-loops="0">bb̄ → ZH <span class="ex-tag">b-channel</span></button>
+          </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">qq̄ → ZZ (di-boson)</div>
+            <button class="example-btn" data-process="u u~ -> Z Z" data-theory="EW" data-loops="0">uū → ZZ <span class="ex-tag">8-γ trace</span></button>
+            <button class="example-btn" data-process="d d~ -> Z Z" data-theory="EW" data-loops="0">dd̄ → ZZ <span class="ex-tag">8-γ trace</span></button>
+            <button class="example-btn" data-process="c c~ -> Z Z" data-theory="EW" data-loops="0">cc̄ → ZZ <span class="ex-tag">8-γ trace</span></button>
+            <button class="example-btn" data-process="s s~ -> Z Z" data-theory="EW" data-loops="0">ss̄ → ZZ <span class="ex-tag">8-γ trace</span></button>
+            <button class="example-btn" data-process="b b~ -> Z Z" data-theory="EW" data-loops="0">bb̄ → ZZ <span class="ex-tag">8-γ trace</span></button>
+          </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">qq̄ → W⁺W⁻ (di-boson)</div>
+            <button class="example-btn" data-process="u u~ -> W+ W-" data-theory="EW" data-loops="0">uū → W⁺W⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="d d~ -> W+ W-" data-theory="EW" data-loops="0">dd̄ → W⁺W⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="c c~ -> W+ W-" data-theory="EW" data-loops="0">cc̄ → W⁺W⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="s s~ -> W+ W-" data-theory="EW" data-loops="0">ss̄ → W⁺W⁻ <span class="ex-tag">t-chan.</span></button>
+            <button class="example-btn" data-process="b b~ -> W+ W-" data-theory="EW" data-loops="0">bb̄ → W⁺W⁻ <span class="ex-tag">t-chan.</span></button>
           </div>
 
           <div class="example-group" data-theory="EW">
@@ -184,10 +229,27 @@
           </div>
 
           <div class="example-group" data-theory="EW">
-            <div class="example-group-label">1-Loop</div>
+            <div class="example-group-label">1-Loop Scattering & Decays</div>
             <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="EW" data-loops="1">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag ex-tag-loop">γ+Z 1-loop</span></button>
             <button class="example-btn" data-process="Z -> e+ e-" data-theory="EW" data-loops="1">Z → e⁺e⁻ <span class="ex-tag ex-tag-loop">Z decay VP</span></button>
           </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">Loop-induced Higgs Decays</div>
+            <button class="example-btn" data-process="H -> gamma gamma" data-theory="EW" data-loops="1">H → γγ <span class="ex-tag ex-tag-loop">W+t loop</span></button>
+            <button class="example-btn" data-process="H -> g g" data-theory="QCD" data-loops="1">H → gg <span class="ex-tag ex-tag-loop">top loop</span></button>
+            <button class="example-btn" data-process="H -> Z gamma" data-theory="EW" data-loops="1">H → Zγ <span class="ex-tag ex-tag-loop">W+t loop</span></button>
+            <button class="example-btn" data-process="H -> b b~" data-theory="EW" data-loops="1">H → bb̄ NLO QCD <span class="ex-tag ex-tag-loop">17α_s/3π</span></button>
+          </div>
+
+          <div class="example-group" data-theory="EW">
+            <div class="example-group-label">Loop-induced Production</div>
+            <button class="example-btn" data-process="g g -> H" data-theory="EW" data-loops="1">gg → H full m_t <span class="ex-tag ex-tag-loop">no HEFT</span></button>
+          </div>
+
+          <!-- EW self-energies and vertex form factors live in the
+               loop-curated registry; not displayed as scattering processes. -->
+
 
           <!-- ══════════════════ BSM ══════════════════ -->
           <div class="example-group" data-theory="BSM">
@@ -209,6 +271,14 @@
             <button class="example-btn" data-process="chi chi~ -> e+ e-" data-theory="BSM" data-loops="0">χχ̄ → e⁺e⁻ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="chi chi~ -> mu+ mu-" data-theory="BSM" data-loops="0">χχ̄ → μ⁺μ⁻ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="chi chi~ -> chi chi~" data-theory="BSM" data-loops="0">χχ̄ → χχ̄ <span class="ex-tag">DM scat.</span></button>
+          </div>
+
+          <div class="example-group" data-theory="BSM">
+            <div class="example-group-label">SM-like with Z' interference</div>
+            <button class="example-btn" data-process="e+ e- -> e+ e-" data-theory="BSM" data-loops="0">e⁺e⁻ → e⁺e⁻ <span class="ex-tag">Bhabha+Z'</span></button>
+            <button class="example-btn" data-process="e- e- -> e- e-" data-theory="BSM" data-loops="0">e⁻e⁻ → e⁻e⁻ <span class="ex-tag">Møller+Z'</span></button>
+            <button class="example-btn" data-process="mu+ mu- -> mu+ mu-" data-theory="BSM" data-loops="0">μ⁺μ⁻ → μ⁺μ⁻ <span class="ex-tag">μ Bhabha+Z'</span></button>
+            <button class="example-btn" data-process="e+ e- -> mu+ mu-" data-theory="BSM" data-loops="0">e⁺e⁻ → μ⁺μ⁻ <span class="ex-tag">Z' resonance</span></button>
           </div>
         </div>
       </details>
@@ -388,7 +458,7 @@
             1PI only
           </label>
           <label class="filter-check" title="Show one representative diagram per topology class (s-channel, t-channel, etc.)">
-            <input type="checkbox" id="filter-unique-topo" />
+            <input type="checkbox" id="filter-unique-topo" checked />
             Unique topologies
           </label>
         </div>

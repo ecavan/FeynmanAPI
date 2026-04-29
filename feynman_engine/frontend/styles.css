@@ -86,11 +86,11 @@ header {
 
 /* ── App layout ──────────────────────────────────────────────────────────── */
 .app-layout {
-  max-width: 1400px;
+  max-width: 1500px;
   margin: 1.5rem auto;
   padding: 0 1.5rem;
   display: grid;
-  grid-template-columns: 210px 1fr;
+  grid-template-columns: 290px 1fr;
   gap: 1.5rem;
   align-items: start;
 }

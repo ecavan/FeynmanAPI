@@ -136,12 +136,18 @@ RUN set -ex \
     && chmod +x /opt/openloops/openloops /opt/openloops/scons \
     && mkdir -p /opt/openloops/proclib
 
-# Bundle the default ppllj (Drell-Yan + jet) process library.  Compiles
-# only against the current build; users add more via `feynman install-process <name>`.
+# Bundle a curated process pack covering the major LHC analyses:
+#   ppllj — Drell-Yan + jet
+#   pptt  — top pair (NLO QCD)
+#   pph   — gluon-fusion Higgs (loop-induced)
+# Each ~50-100 MB compiled.  Other libraries (pphtt, ppvv, pphjj, pphh)
+# are user-installed on demand via `feynman install-process <name>`.
 RUN cd /opt/openloops \
-    && (./openloops libinstall ppllj \
-        && echo "ppllj bundled" \
-        || echo "WARNING: ppllj download failed during build; install via feynman install-process ppllj")
+    && for proc in ppllj pptt pph; do \
+        (./openloops libinstall "$proc" \
+          && echo "$proc bundled") \
+          || echo "WARNING: $proc download failed during build; install via feynman install-process $proc"; \
+       done
 
 # ─── Production image ────────────────────────────────────────────────────────
 FROM python:3.11-slim

@@ -252,23 +252,31 @@ def main():
     setup_parser.add_argument(
         "--skip-looptools",
         action="store_true",
-        help="Skip LoopTools if you only want the recommended QGRAF + FORM setup",
+        help="Skip LoopTools (numerical 1-loop scalar integrals)",
     )
     setup_parser.add_argument(
-        "--with-lhapdf",
+        "--skip-lhapdf",
         action="store_true",
         help=(
-            "Also build LHAPDF and install the CT18LO PDF set "
-            "(adds ~5 minutes to setup; recommended for hadron-collider physics)"
+            "Skip LHAPDF (saves ~5 min; engine falls back to the built-in "
+            "LO PDF with factor-of-2-3 accuracy on hadronic σ)"
         ),
     )
     setup_parser.add_argument(
-        "--with-openloops",
+        "--skip-openloops",
         action="store_true",
         help=(
-            "Also build OpenLoops 2 and install the default ppllj process library "
-            "(adds ~5-10 minutes to setup; enables generic NLO for arbitrary processes)"
+            "Skip OpenLoops 2 (saves ~5-10 min; without it, generic NLO "
+            "QCD virtuals for unregistered processes return HTTP 422 — "
+            "tabulated K-factors for the major LHC channels still work)"
         ),
+    )
+    # Deprecated opt-in flags (kept for backward compatibility, no-op now).
+    setup_parser.add_argument(
+        "--with-lhapdf", action="store_true", help=argparse.SUPPRESS,
+    )
+    setup_parser.add_argument(
+        "--with-openloops", action="store_true", help=argparse.SUPPRESS,
     )
 
     doctor_parser = subparsers.add_parser(
@@ -394,8 +402,8 @@ def main():
         code = _run_setup(
             force=args.force,
             include_looptools=not args.skip_looptools,
-            include_lhapdf=args.with_lhapdf,
-            include_openloops=args.with_openloops,
+            include_lhapdf=not args.skip_lhapdf,
+            include_openloops=not args.skip_openloops,
         )
         raise SystemExit(code)
 

@@ -57,6 +57,45 @@ NLO_K_FACTORS: dict[tuple[str, float | str], KFactor] = {
     ("p p -> t t~ H", "*"): KFactor(1.20, "ttH NLO (LHC HWG YR4)"),
     # VBF Higgs: K_NLO ≈ 1.05 (clean topology, already mostly NLO at LO)
     ("p p -> H j j", "*"):  KFactor(1.05, "VBF Higgs NLO (LHC HWG YR4); K≈1.05"),
+
+    # ── Single-top production ─────────────────────────────────────────────
+    # t-channel single-top dominates at LHC; K_NLO ≈ 1.5 (Kidonakis, NLO+NNLL)
+    # σ_LO ≈ 70 pb, σ_NLO ≈ 100 pb, σ_NNLO+NNLL ≈ 136 pb at 13 TeV.
+    ("p p -> t",       "*"): KFactor(1.50, "Single-top t-channel NLO+NNLL (Kidonakis 2020)"),
+    ("p p -> t~",      "*"): KFactor(1.50, "Anti-top t-channel NLO+NNLL"),
+    # tW associated production
+    ("p p -> t W-",    "*"): KFactor(1.30, "tW associated production NLO QCD (Kidonakis)"),
+    ("p p -> t~ W+",   "*"): KFactor(1.30, "tW associated production NLO QCD (Kidonakis)"),
+    # s-channel single top (smaller σ but well-measured)
+    ("p p -> t b~",    "*"): KFactor(1.40, "Single-top s-channel NLO QCD"),
+
+    # ── Top + boson associated production ─────────────────────────────────
+    # ttZ at 13 TeV: σ_LO ≈ 0.66 pb, σ_NLO ≈ 0.83 pb (K≈1.26).
+    # CMS measured 0.94 pb (1903.04018), ATLAS 0.95 pb (2007.14858).
+    ("p p -> t t~ Z", "*"): KFactor(1.20, "ttZ NLO QCD (Garzelli et al., LHC measurements)"),
+    # ttW at 13 TeV: σ_LO ≈ 0.41 pb, σ_NLO ≈ 0.6 pb (K≈1.4).
+    # NLO QCD + EW corrections are ~10-15% at LHC (de Florian et al.).
+    ("p p -> t t~ W+", "*"): KFactor(1.40, "ttW+ NLO QCD+EW (LHC TopWG, ~0.6 pb at 13 TeV)"),
+    ("p p -> t t~ W-", "*"): KFactor(1.40, "ttW- NLO QCD+EW"),
+    # ttγ at 13 TeV: σ_LO ≈ 1.5 pb, σ_NLO ≈ 1.7 pb (K≈1.13)
+    ("p p -> t t~ gamma", "*"): KFactor(1.13, "ttγ NLO QCD (PROSA/MCFM)"),
+    # 4-top production (rare but on V1.1 wishlist)
+    ("p p -> t t~ t t~", "*"): KFactor(1.20, "tttt NLO QCD (Frederix-Pagani 2017)"),
+
+    # ── V+jets ─────────────────────────────────────────────────────────────
+    # W/Z+jets K_NLO is moderate (~1.05-1.10 for inclusive 1-jet at 13 TeV).
+    # Higher jet multiplicities have larger K-factors due to ααs corrections.
+    ("p p -> Z j",    "*"): KFactor(1.10, "Z+jet NLO QCD (MCFM); K≈1.1 inclusive"),
+    ("p p -> W+ j",   "*"): KFactor(1.10, "W++jet NLO QCD"),
+    ("p p -> W- j",   "*"): KFactor(1.10, "W-+jet NLO QCD"),
+    ("p p -> W+ j j", "*"): KFactor(1.05, "W+ + 2 jets NLO QCD"),
+
+    # ── Multi-boson ───────────────────────────────────────────────────────
+    # WWW/WWZ tri-boson: K_NLO ≈ 1.7-1.8 (NLO QCD large at LHC)
+    ("p p -> W+ W- Z", "*"): KFactor(1.70, "WWZ NLO QCD (MCFM)"),
+    ("p p -> W+ W- W+", "*"): KFactor(1.80, "WWW NLO QCD"),
+    # γγ + jet (NLO has substantial K from gluon-initiated channels)
+    ("p p -> gamma gamma j", "*"): KFactor(1.50, "γγ+jet NLO QCD (MCFM)"),
 }
 
 

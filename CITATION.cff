@@ -1,10 +1,10 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "FeynmanEngine"
-version: "0.1.1"
+version: "0.1.2"
 type: software
 license: "GPL-3.0-only"
-abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service."
+abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction, OpenLoops virtuals, EW Sudakov LL+NLL), differential observables, and PDF-convolved hadronic predictions."
 authors:
   - family-names: "Cavan"
     given-names: "Elijah"
@@ -153,6 +153,101 @@ references:
     year: 2017
     doi: "10.1016/j.cpc.2016.10.013"
     url: "https://doi.org/10.1016/j.cpc.2016.10.013"
+  - type: article
+    title: "OneLOop: For the evaluation of one-loop scalar functions"
+    authors:
+      - family-names: "van Hameren"
+        given-names: "A."
+    journal: "Computer Physics Communications"
+    volume: 182
+    issue: 11
+    start: 2427
+    end: 2438
+    year: 2011
+    url: "https://arxiv.org/abs/1007.4716"
+  - type: article
+    title: "CutTools: a program implementing the OPP reduction method to compute one-loop amplitudes"
+    authors:
+      - family-names: "Ossola"
+        given-names: "G."
+      - family-names: "Papadopoulos"
+        given-names: "C. G."
+      - family-names: "Pittau"
+        given-names: "R."
+    journal: "Journal of High Energy Physics"
+    volume: "0803"
+    start: 42
+    year: 2008
+    url: "https://arxiv.org/abs/0711.3596"
+  - type: article
+    title: "A general algorithm for calculating jet cross sections in NLO QCD"
+    authors:
+      - family-names: "Catani"
+        given-names: "S."
+      - family-names: "Seymour"
+        given-names: "M. H."
+    journal: "Nuclear Physics B"
+    volume: 485
+    issue: "1-2"
+    start: 291
+    end: 419
+    year: 1997
+    doi: "10.1016/S0550-3213(96)00589-5"
+    url: "https://doi.org/10.1016/S0550-3213(96)00589-5"
+  - type: software
+    title: "vegas: Adaptive multidimensional Monte Carlo integration"
+    authors:
+      - family-names: "Lepage"
+        given-names: "G. P."
+    year: 2021
+    url: "https://github.com/gplepage/vegas"
+    notes: "Lepage adaptive importance-sampling Monte Carlo, foundation paper J. Comput. Phys. 27 (1978) 192."
+  - type: article
+    title: "High precision QCD at hadron colliders: electroweak gauge boson rapidity distributions at NNLO"
+    authors:
+      - family-names: "Anastasiou"
+        given-names: "C."
+      - family-names: "Dixon"
+        given-names: "L. J."
+      - family-names: "Melnikov"
+        given-names: "K."
+      - family-names: "Petriello"
+        given-names: "F."
+    journal: "Physical Review D"
+    volume: 69
+    start: 094008
+    year: 2004
+    url: "https://arxiv.org/abs/hep-ph/0312266"
+    notes: "Source of tabulated K_NLO ≈ 1.21 for pp → DY at LHC."
+  - type: article
+    title: "Higgs boson production at the LHC"
+    authors:
+      - family-names: "Spira"
+        given-names: "M."
+      - family-names: "Djouadi"
+        given-names: "A."
+      - family-names: "Graudenz"
+        given-names: "D."
+      - family-names: "Zerwas"
+        given-names: "P. M."
+    journal: "Nuclear Physics B"
+    volume: 453
+    issue: "1-2"
+    start: 17
+    end: 82
+    year: 1995
+    doi: "10.1016/0550-3213(95)00379-7"
+    url: "https://doi.org/10.1016/0550-3213(95)00379-7"
+  - type: article
+    title: "Electroweak radiative corrections at high energies"
+    authors:
+      - family-names: "Pozzorini"
+        given-names: "S."
+    journal: "Physical Review D"
+    volume: 71
+    start: 053002
+    year: 2005
+    notes: "EW Sudakov LL+NLL framework used by the V2.7 generic-EW NLO module."
   - type: article
     title: "LHAPDF6: parton density access in the LHC precision era"
     authors:
