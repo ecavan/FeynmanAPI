@@ -23,6 +23,18 @@ A Feynman diagram generator and amplitude calculator for particle physics. Type 
 
 Full citations are in the [Citations](#citations) section at the bottom.
 
+## Contents
+
+- [Installation](#installation)
+- [Capabilities](#capabilities)
+  - [Theory coverage](#theory-coverage)
+  - [LHC validation at √s = 13 TeV](#lhc-validation-at-s--13-tev)
+  - [What's intentionally out of scope](#whats-intentionally-out-of-scope)
+- [Quick start](#quick-start)
+  - [Examples](#examples)
+- [Architecture](#architecture)
+- [Citations](#citations)
+
 ## Installation
 
 ```bash
