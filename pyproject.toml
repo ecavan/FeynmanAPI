@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "feynman-engine"
-version = "0.1.4"
+version = "0.1.5"
 description = "Feynman diagram generator + amplitude/cross-section calculator wrapping QGRAF, FORM, LoopTools, OpenLoops, and LHAPDF"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -36,14 +36,35 @@ p_sq = Symbol("p^2", real=True)
 # ── 1-loop β functions ────────────────────────────────────────────────────────
 
 def qed_beta0() -> float:
-    r"""QED one-loop β-function coefficient (electron loop only).
+    r"""QED one-loop β-function coefficient per unit charge² × N_c.
 
-    β(α) = +β₀ α² + ...  where  β₀ = 2/(3π)  (one lepton flavor).
+    β(α) = +β₀ α² + ...  where  β₀ = 2/(3π) for ONE Dirac fermion of unit
+    charge and one colour.  Multiply by Q_f² × N_c^f and sum over all
+    fermion flavours active at the scale to get the total β₀.
 
-    The running coupling:
+    The running coupling for one fermion:
         1/α(μ²) = 1/α(μ₀²) − (2/3π) log(μ²/μ₀²)
     """
     return 2.0 / (3.0 * math.pi)
+
+
+# ── Charged-fermion content for full α(q²) running ───────────────────────────
+# (PDG 2024 pole masses; m_e is exact, others are effective MS-bar at low scale)
+_LEPTON_MASSES_GEV = {
+    "electron": 0.000511,  # m_e
+    "muon":     0.10566,   # m_μ
+    "tau":      1.77686,   # m_τ
+}
+# Light-quark contribution to α(q²) is dominated by non-perturbative QCD
+# below ~m_τ.  At M_Z² the world-average leptonic + hadronic shift is
+# Δα(M_Z²) ≈ 0.05912 (Jegerlehner 2017; PDG 2024).  Decomposed:
+#   Δα_lep(M_Z²) ≈ 0.03150  (e + μ + τ)
+#   Δα_had(M_Z²) ≈ 0.02768  (light + heavy quark hadronic, from R(s))
+#   Δα_top(M_Z²) ≈ -0.00007 (negligible)
+# We compute the leptonic piece exactly and add an empirical hadronic shift
+# scaled to log(q²/(2 GeV)²) so that running below m_τ stays approximately
+# leptonic and at q² ≈ M_Z² the total reproduces 1/α ≈ 128.95.
+_DELTA_ALPHA_HAD_AT_MZ = 0.02768   # PDG 2024 / Jegerlehner
 
 
 def qcd_beta0(n_f: int = 6) -> float:
@@ -62,35 +83,76 @@ def qcd_beta0(n_f: int = 6) -> float:
 
 def alpha_running(
     q_sq: float,
-    mu0_sq: float = 1.0,
+    mu0_sq: float = 0.0,
     alpha0: float = 1.0 / 137.036,
 ) -> float:
-    r"""QED running fine-structure constant at scale q².
+    r"""QED running fine-structure constant α(q²).
 
-    α(q²) = α(μ₀²) / [1 − (α(μ₀²)/π) × (1/3) × log(q²/μ₀²)]
+    Includes the one-loop contribution from every charged fermion above its
+    threshold, plus an empirical hadronic shift Δα_had calibrated so that
+    α(M_Z²) reproduces the PDG value 1/α(M_Z²) = 128.95.
 
-    Valid for q² far from thresholds (no quark thresholds included).
+    Δα(q²) = Σ_lep (α₀/(3π)) × Q_l² × log(q²/m_l²) × θ(q² − 4 m_l²)
+            + Δα_had(M_Z²) × log(q²/(2 GeV)²) / log(M_Z²/(2 GeV)²)
+
+    1/α(q²) = 1/α₀ − Δα(q²)
+
+    The leptonic part is the analytic Schwinger-Dyson resummed answer; the
+    hadronic part interpolates linearly in log(q²) from 0 (at the
+    light-hadron threshold ~2 GeV) to the dispersion-relation result at M_Z²
+    — a standard low-budget approximation that's good to ~10⁻⁴ in α at
+    LEP energies.
 
     Parameters
     ----------
     q_sq : float
-        Renormalisation scale squared q² (GeV²).
+        Scale squared q² (GeV²).
     mu0_sq : float
-        Reference scale μ₀² (default = 1 GeV²).
+        Reference scale.  ``0`` (default) means α₀ is taken as the
+        Thomson-limit value 1/137.036; non-zero values keep the legacy
+        single-flavour running for backward compatibility.
     alpha0 : float
-        α at the reference scale (default = α(1 GeV²) ≈ α(0) ≈ 1/137).
-
-    Returns
-    -------
-    float
-        α(q²) in the one-loop QED approximation.
+        α at q² = 0 (default = 1/137.036).
     """
-    b0 = qed_beta0()
-    log_ratio = math.log(q_sq / mu0_sq) if q_sq > 0 and mu0_sq > 0 else 0.0
-    denom = 1.0 - alpha0 * b0 * log_ratio
-    if abs(denom) < 1e-15:
+    if q_sq <= 0:
+        return alpha0
+
+    # Legacy single-flavour mode: keep behaviour for callers that pass a
+    # non-zero reference scale (notably the unit-test sweep).
+    if mu0_sq > 0:
+        b0 = qed_beta0()
+        log_ratio = math.log(q_sq / mu0_sq)
+        denom = 1.0 - alpha0 * b0 * log_ratio
+        if abs(denom) < 1e-15:
+            raise ValueError(f"QED Landau pole encountered at q²={q_sq:.3g} GeV².")
+        return alpha0 / denom
+
+    # Full Δα(q²) running — leptonic loops + empirical hadronic shift.
+    # Lepton contribution at the "-5/3" subtraction (Jegerlehner 2017
+    # Eq. 2.18): Δα_f = (α/(3π))[log(q²/m_f²) − 5/3] for q² ≫ m_f².
+    delta = 0.0
+    for _, m_l in _LEPTON_MASSES_GEV.items():
+        threshold = 4.0 * m_l ** 2
+        if q_sq <= threshold:
+            continue
+        delta += (alpha0 / (3.0 * math.pi)) * (
+            math.log(q_sq / m_l ** 2) - 5.0 / 3.0
+        )
+
+    # Empirical hadronic shift (Δα_had at M_Z² ≈ 0.02768).  Below ~2 GeV
+    # the perturbative QCD calc breaks down, so we linearly ramp Δα_had
+    # in log(q²) from 0 at q² = 4 GeV² up to the M_Z² value.
+    Q_HAD_LOW_SQ = 4.0  # (2 GeV)²
+    M_Z_SQ = 91.1876 ** 2
+    if q_sq > Q_HAD_LOW_SQ:
+        log_ratio_had = math.log(q_sq / Q_HAD_LOW_SQ)
+        log_ratio_max = math.log(M_Z_SQ / Q_HAD_LOW_SQ)
+        delta += _DELTA_ALPHA_HAD_AT_MZ * (log_ratio_had / log_ratio_max)
+
+    inv_alpha = 1.0 / alpha0 - delta / alpha0
+    if inv_alpha <= 0:
         raise ValueError(f"QED Landau pole encountered at q²={q_sq:.3g} GeV².")
-    return alpha0 / denom
+    return 1.0 / inv_alpha
 
 
 def alpha_s_running(

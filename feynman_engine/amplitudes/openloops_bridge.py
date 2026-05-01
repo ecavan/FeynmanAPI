@@ -143,11 +143,21 @@ def _load_openloops():
     global _openloops_module
     if _openloops_module is not None:
         return _openloops_module
-    if install_prefix() is None:
+    prefix = install_prefix()
+    if prefix is None:
         return None
     try:
         with _CwdInPrefix():
             import openloops  # noqa: WPS433 — local import is intentional
+            # Tell the Fortran layer where the install lives so its
+            # process-library lookup uses an absolute path rather than
+            # CWD-relative ``proclib/``.  Without this, register_process
+            # calls Fortran ``exit()`` on a missing proclib even when CWD
+            # is correct (the chdir is itself fragile across threads).
+            try:
+                openloops.set_parameter("install_path", str(prefix) + "/")
+            except Exception:
+                pass
         _openloops_module = openloops
         return openloops
     except Exception:

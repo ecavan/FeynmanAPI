@@ -80,11 +80,21 @@ def _build_coupling_defaults(theory: str) -> dict[str, float]:
     |M|² if Z were a pure vector boson with that single coupling — the
     backend's V-A structure approximation.
     """
-    # Electroweak parameters (PDG 2023 values).
+    # Electroweak parameters (PDG 2024 values).
     _SIN2_THETA_W = 0.23122
     _COS2_THETA_W = 1.0 - _SIN2_THETA_W
-    _G_W = _E_EM / math.sqrt(_SIN2_THETA_W)
-    _G_Z = _E_EM / math.sqrt(_SIN2_THETA_W * _COS2_THETA_W)
+
+    # "Improved Born" coupling: use α(M_Z²) ≈ 1/128.95 instead of α(0)
+    # ≈ 1/137.036 for resonance-scale processes.  This absorbs the bulk of
+    # the leptonic + hadronic vacuum polarisation into the Z/W vertex
+    # factors, bringing tree-level Γ(Z→ll), Γ(W→ℓν), Γ(Z→qq̄) within ~1 %
+    # of PDG values.  The Thomson-limit α(0) is kept as ``alpha`` /
+    # ``e_em`` so QED-only processes (Bhabha, Compton, e+e-→μ+μ- pure
+    # photon) are unchanged; the on-shell α only enters the EW couplings.
+    _ALPHA_MZ = 1.0 / 128.95
+    _E_EM_MZ = math.sqrt(4.0 * math.pi * _ALPHA_MZ)
+    _G_W = _E_EM_MZ / math.sqrt(_SIN2_THETA_W)
+    _G_Z = _E_EM_MZ / math.sqrt(_SIN2_THETA_W * _COS2_THETA_W)
     _VEV = 246.21965  # Higgs VEV in GeV
 
     def _g_Z_fermion(T3: float, Q: float) -> float:
@@ -439,7 +449,20 @@ def differential_cross_section(
 
     defaults = _build_coupling_defaults(theory)
     if coupling_vals:
+        # Apply override.  When the user overrides ``alpha`` (the
+        # fine-structure constant), also update derived symbols ``e``
+        # and ``e_em`` (= √(4π·α)) so curated formulas that use the
+        # electric-charge symbol pick up the new value.  Same for α_s
+        # and ``g_s``/``g``.
         defaults.update(coupling_vals)
+        if "alpha" in coupling_vals and coupling_vals["alpha"] is not None:
+            new_e = math.sqrt(4.0 * math.pi * coupling_vals["alpha"])
+            defaults["e"] = new_e
+            defaults["e_em"] = new_e
+        if "alpha_s" in coupling_vals and coupling_vals["alpha_s"] is not None:
+            new_g_s = math.sqrt(4.0 * math.pi * coupling_vals["alpha_s"])
+            defaults["g_s"] = new_g_s
+            defaults["g"] = new_g_s
 
     try:
         masses = _get_particle_masses(process, theory)
@@ -534,7 +557,20 @@ def total_cross_section(
 
     defaults = _build_coupling_defaults(theory)
     if coupling_vals:
+        # Apply override.  When the user overrides ``alpha`` (the
+        # fine-structure constant), also update derived symbols ``e``
+        # and ``e_em`` (= √(4π·α)) so curated formulas that use the
+        # electric-charge symbol pick up the new value.  Same for α_s
+        # and ``g_s``/``g``.
         defaults.update(coupling_vals)
+        if "alpha" in coupling_vals and coupling_vals["alpha"] is not None:
+            new_e = math.sqrt(4.0 * math.pi * coupling_vals["alpha"])
+            defaults["e"] = new_e
+            defaults["e_em"] = new_e
+        if "alpha_s" in coupling_vals and coupling_vals["alpha_s"] is not None:
+            new_g_s = math.sqrt(4.0 * math.pi * coupling_vals["alpha_s"])
+            defaults["g_s"] = new_g_s
+            defaults["g"] = new_g_s
 
     try:
         masses = _get_particle_masses(process, theory)
@@ -698,7 +734,20 @@ def total_cross_section_mc(
 
     defaults = _build_coupling_defaults(theory)
     if coupling_vals:
+        # Apply override.  When the user overrides ``alpha`` (the
+        # fine-structure constant), also update derived symbols ``e``
+        # and ``e_em`` (= √(4π·α)) so curated formulas that use the
+        # electric-charge symbol pick up the new value.  Same for α_s
+        # and ``g_s``/``g``.
         defaults.update(coupling_vals)
+        if "alpha" in coupling_vals and coupling_vals["alpha"] is not None:
+            new_e = math.sqrt(4.0 * math.pi * coupling_vals["alpha"])
+            defaults["e"] = new_e
+            defaults["e_em"] = new_e
+        if "alpha_s" in coupling_vals and coupling_vals["alpha_s"] is not None:
+            new_g_s = math.sqrt(4.0 * math.pi * coupling_vals["alpha_s"])
+            defaults["g_s"] = new_g_s
+            defaults["g"] = new_g_s
 
     # Substitute coupling constants by symbol name.
     subs_map = {}
@@ -886,7 +935,20 @@ def total_cross_section_vegas(
 
     defaults = _build_coupling_defaults(theory)
     if coupling_vals:
+        # Apply override.  When the user overrides ``alpha`` (the
+        # fine-structure constant), also update derived symbols ``e``
+        # and ``e_em`` (= √(4π·α)) so curated formulas that use the
+        # electric-charge symbol pick up the new value.  Same for α_s
+        # and ``g_s``/``g``.
         defaults.update(coupling_vals)
+        if "alpha" in coupling_vals and coupling_vals["alpha"] is not None:
+            new_e = math.sqrt(4.0 * math.pi * coupling_vals["alpha"])
+            defaults["e"] = new_e
+            defaults["e_em"] = new_e
+        if "alpha_s" in coupling_vals and coupling_vals["alpha_s"] is not None:
+            new_g_s = math.sqrt(4.0 * math.pi * coupling_vals["alpha_s"])
+            defaults["g_s"] = new_g_s
+            defaults["g"] = new_g_s
 
     # Substitute coupling constants by symbol name.
     subs_map = {}

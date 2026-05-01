@@ -391,6 +391,18 @@ class VegasGrid:
     def adapt(self, u: np.ndarray, f_abs: np.ndarray, alpha: float = 1.5):
         """Refine the grid based on the integrand distribution.
 
+        Implements the canonical Lepage VEGAS adaptation (J. Comp. Phys. 27
+        (1978) 192) with the standard three-point blur + damped Lepage
+        weighting:
+
+            m_i = ((1 − p_i) / ln(1/p_i))^α     where p_i = smoothed_i / Σ
+
+        The 3-point blur prevents the catastrophic grid-collapse that
+        occurs when one or two bins capture all the integrand weight in
+        a single iteration; without it, all 49 inner edges get crammed
+        into the single peak bin and subsequent iterations sample only
+        a tiny window of phase space.
+
         Parameters
         ----------
         u : ndarray, shape (n_events, n_dim)
@@ -398,8 +410,12 @@ class VegasGrid:
         f_abs : ndarray, shape (n_events,)
             |f(x)| × jacobian for each sample.
         alpha : float
-            Damping exponent (1.5 is Lepage's recommendation).
+            Damping exponent.  Lepage recommends 1.5; α = 0 disables
+            adaptation; smaller α gives more conservative (slower) refinement.
         """
+        if alpha <= 0.0:
+            return  # adaptation disabled
+
         for d in range(self.n_dim):
             edges = self.edges[d]
             bin_idx = np.clip(
@@ -413,35 +429,49 @@ class VegasGrid:
             if total <= 0:
                 continue
 
-            # Smooth: replace each bin value with the damped version
-            # d_i = ((bin_i/total - 1) / ln(bin_i/total))^alpha  if bin_i > 0
-            avg = total / self.n_bins
-            smoothed = np.where(
-                bin_sum > 0,
-                ((bin_sum / avg - 1.0) / np.log(np.maximum(bin_sum / avg, 1e-30))) ** alpha
-                if alpha != 1.0 else bin_sum,
-                0.0,
-            )
-            # Simpler Lepage smoothing: just use bin_sum^alpha
-            smoothed = np.power(np.maximum(bin_sum, 1e-30), alpha)
+            # Step 1: three-point blur (Lepage smoothing).  Boundary
+            # bins use a 2-point average to mirror at the edge.
+            smoothed = np.empty_like(bin_sum)
+            if self.n_bins >= 3:
+                smoothed[0] = (7 * bin_sum[0] + bin_sum[1]) / 8.0
+                smoothed[-1] = (bin_sum[-2] + 7 * bin_sum[-1]) / 8.0
+                smoothed[1:-1] = (
+                    bin_sum[:-2] + 6 * bin_sum[1:-1] + bin_sum[2:]
+                ) / 8.0
+            else:
+                smoothed[:] = bin_sum
+
             smoothed_total = smoothed.sum()
             if smoothed_total <= 0:
                 continue
 
-            # New bin edges: distribute so that each new bin gets equal
-            # weight of the smoothed distribution.
-            cum = np.cumsum(smoothed)
-            cum = cum / cum[-1]  # normalize to [0, 1]
+            # Step 2: Lepage damping.  p_i = smoothed_i / Σ, weight =
+            # ((1 − p_i) / ln(1/p_i))^α.  For p → 0 this → 0; for p → 1
+            # the limit is 1 (L'Hopital).
+            p = smoothed / smoothed_total
+            with np.errstate(divide="ignore", invalid="ignore"):
+                # Empty bins after smoothing: assign tiny floor so the
+                # grid remains responsive to future iterations rather
+                # than freezing the dead region permanently.
+                p_safe = np.clip(p, 1e-30, 1.0 - 1e-15)
+                damping = np.power(
+                    (1.0 - p_safe) / -np.log(p_safe), alpha
+                )
+            damping_total = damping.sum()
+            if damping_total <= 0:
+                continue
 
-            new_edges = np.zeros(self.n_bins + 1)
+            # Step 3: redistribute edges so each new bin captures an
+            # equal weight of the damping distribution.
+            cum = np.cumsum(damping)
+            cum = cum / cum[-1]  # normalise to [0, 1]
+
+            new_edges = np.empty(self.n_bins + 1)
             new_edges[0] = 0.0
             new_edges[-1] = 1.0
 
-            # For each new bin boundary j/n_bins, find where it falls in the
-            # cumulative distribution and interpolate.
             for j in range(1, self.n_bins):
                 target = j / self.n_bins
-                # Find the old bin where cum crosses target
                 k = np.searchsorted(cum, target)
                 k = min(k, self.n_bins - 1)
                 if k == 0:

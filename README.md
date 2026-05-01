@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/)
 [![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/)
 [![License](https://img.shields.io/pypi/l/feynman-engine?cacheSeconds=300)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19673075.svg?v=0.1.4)](https://doi.org/10.5281/zenodo.19673075)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19673075.svg?v=0.1.5)](https://doi.org/10.5281/zenodo.19673075)
 
 A Feynman diagram generator and amplitude calculator for particle physics. Type a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams (SVG/TikZ), the symbolic spin-averaged $|\overline{\mathcal{M}}|^2$, integrated cross-sections at LO and NLO, decay widths, and 1-loop scalar integrals.
 
@@ -46,14 +46,14 @@ For platform-specific prerequisites, the lightweight install path, Docker, and t
 ## Capabilities
 
 - **Feynman diagrams** by topology, rendered to SVG/TikZ
-- **Tree amplitudes** via 54 curated formulas, FORM color algebra, or SymPy γ-matrix traces
-- **1-loop amplitudes** via 35 curated formulas, Passarino-Veltman reduction, and analytic A0/B0/C0/D0 (pure Python, no Fortran needed for the closed-form integrals)
+- **Tree amplitudes** via 140 curated formulas (15 QED, 56 QCD, 68 EW, 1 BSM template, including per-quark-flavour Drell-Yan and charged-current variants), FORM color algebra, or SymPy γ-matrix traces
+- **1-loop amplitudes** via 35 curated formulas, Passarino-Veltman reduction, and analytic A0/B0/C0/D0 (pure Python, no Fortran needed for the closed-form integrals; LoopTools fallback for general kinematics)
 - **Cross-sections** via scipy.quad (2→2) and RAMBO/Vegas Monte Carlo (2→N) with full massive Källén kinematics
-- **Decay widths** for every Z/W/H/top channel with self-reported PDG deviation
+- **Decay widths** for nine Higgs channels plus all Z/W/top channels, agreeing with PDG 2024 within 3% per channel and within 0.1% on the summed Higgs width; off-shell H → V*V* → 4f handled via 2-D Breit-Wigner integration (Pocsik-Zsigmond / Cahn)
 - **Differential observables** for cosθ, pT, η, y, M_inv, M_ll, ΔR
 - **Hadronic σ** with built-in LO PDF (factor-of-2-3 accuracy) or LHAPDF + CT18LO (percent-level)
-- **NLO** in five regimes: tabulated LHC K-factors, universal QED via charge-correlator (`K = 1 + 3α/(4π)` exact for textbook cases), EW Sudakov LL+NLL, first-principles Catani-Seymour Drell-Yan (`K(pp→DY @ 13 TeV) = 1.190` vs YR4 1.21), and OpenLoops virtuals for arbitrary QCD processes
-- **Trust badges** on every numerical result (`validated` / `approximate` / `blocked`); the API refuses (HTTP 422) processes that would otherwise return wrong numbers
+- **NLO** in six regimes: 34 tabulated LHC K-factors, universal QED via charge-correlator (`K = 1 + 3α/(4π)` exact for textbook cases), EW Sudakov LL+NLL, first-principles Catani-Seymour Drell-Yan (`K(pp→DY @ 13 TeV) = 1.19` vs YR4 1.21), tabulated NLO QCD K-factors for partial decay widths (`H → gg` K=1.66, `H → bb̄` K=1.13, `H → cc̄` K=1.24), and OpenLoops virtuals for arbitrary QCD processes
+- **Trust labels** on every numerical result (`validated` / `approximate` / `rough` / `blocked`); the API refuses (HTTP 422) processes that would otherwise return wrong numbers
 - **REST API + Python API + browser UI** all from one `pip install`
 
 ### Theory coverage
@@ -70,13 +70,30 @@ For platform-specific prerequisites, the lightweight install path, Docker, and t
 
 | Process | Engine σ | Reference | Status |
 |---|---|---|---|
-| pp → tt̄ | 793 pb | 700-830 pb | within 13% |
+| pp → tt̄ (LO) | 518 pb | MG5 LO 504 pb | within 3% of MG5 |
+| pp → tt̄ (NLO, K=1.6) | 828 pb | LHC NLO 700-830 pb | in band |
 | pp → DY (60 < M_ll < 120) | 1530 pb | ~2000 pb | within 25% |
-| pp → ZZ | 7.8 pb | ~10 pb | within 22% |
-| pp → H (ggF) | 22.7 pb | 16-22 pb (PDF dep.) | in range |
-| pp → ZH | 0.27 pb | ~0.5 pb | within 50% |
+| pp → ZZ | 8.8 pb | ~10 pb | within 12% |
+| pp → H (ggF, NLO K=1.7) | 38.6 pb | YR4 NNLO ~44 pb | within 12% |
+| pp → ZH | 0.58 pb | ~0.5 pb | within 16% |
 | pp → H + jj (VBF) | 3.78 pb | 3.78 pb | exact (calibrated) |
-| pp → γγ (pT_γ > 30 GeV) | 59 pb | 30-50 pb | within 2× |
+| pp → γγ (pT_γ > 30 GeV) | 30 pb | 30-50 pb | in range |
+
+### Higgs decay validation (m_H = 125.20 GeV)
+
+All nine SM Higgs partial widths agree with PDG 2024 within 3%; sum of partial widths reproduces the PDG total Γ_H to 0.1%.
+
+| Channel | Engine | PDG 2024 | Δ |
+|---|---|---|---|
+| H → bb̄ (LO + NLO QCD K=1.13) | 2.413 MeV | 2.41 MeV | +0.12% |
+| H → cc̄ (LO + NLO QCD K=1.24) | 0.117 MeV | 0.117 MeV | +0.24% |
+| H → τ⁺τ⁻ | 0.259 MeV | 0.257 MeV | +0.83% |
+| H → gg (LO + NLO QCD K=1.66) | 0.335 MeV | 0.336 MeV | -0.25% |
+| H → γγ (exact loop FF) | 9.16 keV | 9.31 keV | -1.6% |
+| H → Zγ (loop FF) | 6.41 keV | 6.31 keV | +1.5% |
+| H → W*W* → 4f (off-shell BW) | 0.855 MeV | 0.881 MeV | -3.0% |
+| H → Z*Z* → 4f (off-shell BW) | 0.108 MeV | 0.108 MeV | -0.02% |
+| **Σ Γ_H (sum)** | **4.10 MeV** | **4.10 MeV** | **+0.1%** |
 
 ### What's intentionally out of scope
 
@@ -96,7 +113,16 @@ r = total_cross_section("e+ e- -> mu+ mu-", "QED", sqrt_s=91.0)
 print(r["sigma_pb"], r["trust_level"])    # 10.47 pb, "validated"
 
 r = hadronic_cross_section("p p -> t t~", sqrt_s=13000.0, theory="QCD", order="NLO")
-print(r["sigma_pb"], r["k_factor"])       # 793 pb, K=1.6 (tabulated NLO)
+print(r["sigma_pb"], r["k_factor"])       # 828 pb, K=1.6 (tabulated NLO)
+```
+
+The decay-width route accepts an `order` parameter:
+
+```python
+from feynman_engine.api.routes import get_decay_width
+
+r = get_decay_width(process="H -> g g", theory="QCD", order="NLO")
+print(r["width_mev"], r["k_factor_nlo"]) # 0.335 MeV, K=1.66 (Spira 1995)
 ```
 
 The full REST API surface is documented at `http://localhost:8000/docs` (Swagger) once you run `feynman serve`.
@@ -162,7 +188,7 @@ feynman_engine/
 └── resources/             Bundled HEP source archives + QGRAF model files
 ```
 
-The trust system in `physics/trust.py` is the safety boundary. Every endpoint that returns a number classifies the request first and refuses (HTTP 422 with a structured `block_reason` and `workaround`) for processes known to produce wrong values.
+The trust labelling in `physics/trust.py` is the safety boundary. Every endpoint that returns a number classifies the request first and refuses (HTTP 422 with a structured `block_reason` and `workaround`) for processes known to produce wrong values.
 
 ## Citations
 

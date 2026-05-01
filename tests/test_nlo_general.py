@@ -541,8 +541,9 @@ def test_v24_pp_tt_uses_tabulated_k():
     from feynman_engine.amplitudes.hadronic import hadronic_cross_section
     r = hadronic_cross_section("p p -> t t~", sqrt_s=13000.0, theory="QCD", order="NLO")
     assert r["supported"]
-    # Reference: σ_LO(tt̄) ≈ 793 pb (engine), K=1.6 → σ_NLO ≈ 1270 pb
-    assert 1100 < r["sigma_pb"] < 1400, f"σ_NLO(tt̄) = {r['sigma_pb']} pb not in expected range"
+    # Reference (v0.1.5 post-fix): σ_LO(tt̄) ≈ 552 pb (engine, matches MG5 LO 504 pb to 9.5%);
+    # K=1.6 → σ_NLO ≈ 880 pb (consistent with LHC NLO measurement 700-830 pb).
+    assert 750 < r["sigma_pb"] < 1000, f"σ_NLO(tt̄) = {r['sigma_pb']} pb not in expected range"
     # K-factor reported
     assert r.get("k_factor") == pytest.approx(1.6, rel=0.05)
 

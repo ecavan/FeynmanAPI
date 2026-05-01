@@ -57,6 +57,20 @@ _ALIASES: dict[str, str] = {
     "z0": "Z",
     "tau": "tau-",
     "antitau": "tau+",
+    # Neutrino aliases (ve, vμ, vτ) and antineutrino aliases (ve~, vμ~, vτ~).
+    # Common shorthand in textbooks and the literature_audit harness.
+    "ve":     "nu_e",
+    "vmu":    "nu_mu",
+    "vtau":   "nu_tau",
+    "ve~":    "nu_e~",
+    "vmu~":   "nu_mu~",
+    "vtau~":  "nu_tau~",
+    "nue":    "nu_e",
+    "numu":   "nu_mu",
+    "nutau":  "nu_tau",
+    "nue~":   "nu_e~",
+    "numu~":  "nu_mu~",
+    "nutau~": "nu_tau~",
 }
 
 

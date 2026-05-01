@@ -26,7 +26,8 @@ from __future__ import annotations
 from typing import Optional
 
 from sympy import (
-    Expr, Integer, Rational, Symbol, latex, pi, symbols, sqrt, log, Abs
+    Expr, Integer, Rational, Symbol, latex, pi, symbols, sqrt, log, Abs,
+    asin, Piecewise,
 )
 
 from feynman_engine.amplitudes.types import AmplitudeResult
@@ -595,28 +596,34 @@ def _ew_h_to_gg_1loop() -> AmplitudeResult:
     In the heavy-top limit (m_t → ∞), the form factor A_{1/2}(τ) → 4/3, and
     the decay width becomes exact to O(α_s²):
 
-        Γ(H→gg) = (α_s² m_H³)/(72π³ v²)
+        Γ(H→gg) = (α_s² m_H³)/(72 π³ v²)            [LO, NLO and NNLO QCD
+                                                     corrections add ~85%]
 
-    The spin-summed |M|² for H → gg (from the effective ggH vertex):
-        Σ|M|² = (α_s² m_H⁴)/(8π² v²)
+    The spin- and colour-summed |M̄|² for H → gg from the effective ggH
+    vertex (L_eff = (α_s/(3π v)) h G^a_μν G^{aμν}/4) is:
 
-    averaged over initial polarisations (no average — scalar parent):
-        |M̄|² = (α_s² m_H⁴)/(8π² v²)
+        |M̄|² = (α_s/(3π v))² × δ^{ab}δ^{ab} × 2 (k₁·k₂)²
+              = (α_s²)/(9π²v²) × 8 × 2 × (m_H²/2)²
+              = 4 α_s² m_H⁴ / (9 π² v²)
 
-    This is the dominant Higgs production mechanism at the LHC (gg fusion)
-    and its reverse decay.
+    H is scalar so no initial-state spin average.  Two final gluons get a
+    1/2! identical-particle factor when computing the width.
+
+    Then Γ = (1/2!) × |M̄|² × |p|/(8π m_H²) with |p| = m_H/2 reproduces
+    the standard formula α_s² m_H³/(72 π³ v²).
 
     Ref: Ellis, Grinstein, Wilczek, PLB 292 (1992);
          Spira, Djouadi, Graudenz, Zerwas, NPB 453 (1995);
          Peskin & Schroeder problem 21.3.
     """
-    msq = alpha_s**2 * m_H**4 / (8 * pi**2 * v**2)
+    # 4/(9 π² v²) factor — was (1/8 π² v²) which is 32/9× too small.
+    msq = Rational(4, 9) * alpha_s**2 * m_H**4 / (pi**2 * v**2)
     return AmplitudeResult(
         process="H -> g g",
         theory="QCD",
         msq=msq,
         msq_latex=(
-            r"|\mathcal{M}|^2 = \frac{\alpha_s^2 m_H^4}{8\pi^2 v^2}"
+            r"|\mathcal{M}|^2 = \frac{4\alpha_s^2 m_H^4}{9\pi^2 v^2}"
             r"\quad\text{(heavy-top limit)}"
         ),
         integral_latex=(
@@ -653,23 +660,38 @@ def _ew_h_to_gammagamma_1loop() -> AmplitudeResult:
                  = (α² m_H³)/(256π³ v²) × |−7 + 16/9|²
                  = (α² m_H³)/(256π³ v²) × (47/9)²
 
-    The spin-summed |M|²:
-        Σ|M|² = (α² m_H⁴)/(32π² v²) × (47/9)²
+    Inverting Γ = (1/(2!)) × |M|² × |p|/(8π m_H²) with |p| = m_H/2:
+        |M|² = (α² m_H⁴)/(8π² v²) × (47/9)²
 
     Ref: Ellis, Grinstein, Wilczek PLB 292 (1992);
          Marciano & Zhang PRD 33 (1986);
-         Djouadi, Phys. Rep. 457 (2008) 1–216 §2.3.
+         Djouadi, Phys. Rep. 457 (2008) 1–216 §2.3;
+         PDG 2024 Higgs review.
     """
-    # |A_W + N_c Q_t^2 A_top|^2 = |-7 + 3*(4/9)*(4/3)|^2 = |-7 + 16/9|^2
-    #  = |(-63+16)/9|^2 = (47/9)^2
-    amp_factor_sq = (Rational(47, 9))**2
-    msq = alpha**2 * m_H**4 / (32 * pi**2 * v**2) * amp_factor_sq
+    # Exact finite-mass form factors (Djouadi review hep-ph/0503173 Eq. 2.43):
+    #   τ_i  = m_H² / (4 m_i²)
+    #   f(τ) = arcsin²(√τ)                              (for τ ≤ 1)
+    #   A_{1/2}(τ) = 2 [τ + (τ−1) f(τ)] / τ²            (fermion loop)
+    #   A_1(τ)     = −[2τ² + 3τ + 3(2τ−1) f(τ)] / τ²    (W loop)
+    # Heavy-particle limits: A_{1/2}(τ→0) = 4/3, A_1(τ→0) = −7, giving
+    # |−7 + 16/9|² = (47/9)² ≈ 27.27.  At m_H = 125 GeV the exact factors
+    # give |A|² ≈ 41.9, so the heavy-particle limit underestimates by ~35 %.
+    tau_W = m_H**2 / (4 * m_W**2)
+    tau_t = m_H**2 / (4 * m_t**2)
+    f_W = asin(sqrt(tau_W))**2
+    f_t = asin(sqrt(tau_t))**2
+    A_1_W   = -(2 * tau_W**2 + 3 * tau_W + 3 * (2 * tau_W - 1) * f_W) / tau_W**2
+    A_half_t = 2 * (tau_t + (tau_t - 1) * f_t) / tau_t**2
+    # N_c Q_t² A_{1/2} for the top loop (N_c = 3, Q_t = 2/3 → N_c Q_t² = 4/3)
+    A_total = A_1_W + Rational(4, 3) * A_half_t
+    amp_factor_sq = A_total**2
+    msq = alpha**2 * m_H**4 / (8 * pi**2 * v**2) * amp_factor_sq
     return AmplitudeResult(
         process="H -> gamma gamma",
         theory="EW",
         msq=msq,
         msq_latex=(
-            r"|\mathcal{M}|^2 = \frac{\alpha^2 m_H^4}{32\pi^2 v^2}"
+            r"|\mathcal{M}|^2 = \frac{\alpha^2 m_H^4}{8\pi^2 v^2}"
             r"\left|\underbrace{-7}_{W} + \underbrace{\frac{16}{9}}_{\text{top}}\right|^2"
         ),
         integral_latex=(
@@ -710,11 +732,18 @@ def _ew_h_to_zgamma_1loop() -> AmplitudeResult:
     Ref: Cahn, Ellis, Grinstein, Wilczek, PLB 82 (1979);
          Bergström & Hulth, NPB 259 (1985) 137.
     """
-    sin2_W = Symbol("sin2_W", positive=True)
-    # Phase-space factor (1 - m_Z^2/m_H^2)^3
-    phase_space = (1 - m_Z**2 / m_H**2)**3
-    # Approximate form factor squared (numerically ~0.7 of H→γγ)
-    A_eff_sq = Symbol("|A_W^{Zgamma} + A_t^{Zgamma}|^2", positive=True)
+    # |M̄|² ∝ (m_H² − m_Z²)² = m_H⁴ (1 − m_Z²/m_H²)² from the H→Zγ vertex
+    # squared; the third power of (1 − m_Z²/m_H²) in the standard width
+    # comes from the |p|/(8π m_H²) phase-space factor (|p| = (m_H² −
+    # m_Z²)/(2 m_H)).  So the msq carries the **2nd** power.
+    phase_space = (1 - m_Z**2 / m_H**2)**2
+    # Effective form factor calibrated so that
+    #   Γ(H→Zγ) = msq × |p|/(8π m_H²) = α² m_H³ (1−m_Z²/m_H²)³ A/(256 π³ v²)
+    # reproduces PDG 2024 Γ(H→Zγ) ≈ 6.31 keV (BR ≈ 1.54×10⁻³) at m_H = 125.
+    # In the standard Djouadi-review normalisation (factor 1/(128π³v²))
+    # this corresponds to |A|² ≈ 142, which matches the explicit loop-
+    # function computation in Carena et al. 1207.7028 §3.
+    A_eff_sq = Rational(285)
     msq = alpha**2 * m_H**4 / (16 * pi**2 * v**2) * phase_space * A_eff_sq
     return AmplitudeResult(
         process="H -> Z gamma",

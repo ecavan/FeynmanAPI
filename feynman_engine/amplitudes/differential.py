@@ -369,7 +369,12 @@ def _histogram_2toN_mc(
     from feynman_engine.physics.amplitude import get_amplitude
     from feynman_engine.physics.translator import parse_process
 
-    if observable not in _MC_OBSERVABLES:
+    # Accept observable name case-insensitively (M_ll == m_ll, pT_lepton == pt_lepton, …)
+    obs_canon = next(
+        (k for k in _MC_OBSERVABLES if k.lower() == observable.lower()),
+        observable,
+    )
+    if obs_canon not in _MC_OBSERVABLES:
         return {
             "supported": False,
             "error": (
@@ -377,7 +382,7 @@ def _histogram_2toN_mc(
                 f"Available: {sorted(_MC_OBSERVABLES)}."
             ),
         }
-    obs_fn, unit = _MC_OBSERVABLES[observable]
+    obs_fn, unit = _MC_OBSERVABLES[obs_canon]
 
     try:
         spec = parse_process(process.strip(), theory.upper())
