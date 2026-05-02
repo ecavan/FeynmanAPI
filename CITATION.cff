@@ -4,6 +4,11 @@ title: "FeynmanEngine"
 version: "0.2.1"
 type: software
 license: "GPL-3.0-only"
+doi: "10.5281/zenodo.19964300"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.19964300"
+    description: "Concept DOI for this version of FeynmanEngine"
 abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction, OpenLoops virtuals, EW Sudakov LL+NLL), differential observables, and PDF-convolved hadronic predictions."
 authors:
   - family-names: "Cavan"
