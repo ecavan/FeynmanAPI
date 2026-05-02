@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="FeynmanEngine API",
         description="Generate and render Feynman diagrams for high-energy physics processes.",
-        version="0.1.1",
+        version="0.2.1",
         docs_url="/docs",
         redoc_url="/redoc",
     )
