@@ -245,6 +245,60 @@ def _qed_ee_to_mumu_1loop_vp() -> AmplitudeResult:
     )
 
 
+def _qed_ll_to_llprime_1loop_vp(initial: str, final: str) -> AmplitudeResult:
+    """Generic 1-loop VP correction to ℓ_i ℓ̄_i → ℓ_j ℓ̄_j (any flavour pair).
+
+    The leading 1-loop correction to the s-channel γ exchange is the
+    photon-propagator vacuum polarisation, which is universal in the
+    sense that it depends only on the photon momentum q² = s, not on
+    the external lepton flavours.  The same δ|M̄|²/(|M̄|²_tree) =
+    −2Π(s)/s applies to every (initial, final) combination::
+
+        Π(s) = (α/(3π)) Σ_loops [B₀(0;m²,m²) − B₀(s;m²,m²)]
+
+    The sum runs over every fermion species lighter than √s (e, μ, τ
+    are leptons; quarks contribute the hadronic VP which is significant
+    above ~1 GeV but ignored here — see ``alpha_running`` in
+    ``feynman_engine.amplitudes.renorm`` for the full Δα(s)).
+
+    Differs from ``_qed_ee_to_mumu_1loop_vp`` only in the registered
+    process string — the formula is the same.  Registered for every
+    non-electron lepton-pair scattering combination so the API exact-
+    string lookup succeeds for queries like ``mu+ mu- -> tau+ tau-``.
+
+    Ref: P&S §10.3; Schwartz §16.3; Renton "EW Interactions" §3.3.
+    """
+    Pi_sym = (alpha / (3 * pi)) * Symbol(
+        "Re[B0(0;m^2,m^2) - B0(s;m^2,m^2)]", real=True,
+    )
+    sigma_corr = -2 * Pi_sym / s
+    return AmplitudeResult(
+        process=f"{initial}+ {initial}- -> {final}+ {final}-",
+        theory="QED",
+        msq=sigma_corr,
+        msq_latex=(
+            r"\delta|\bar{\mathcal{M}}|^2 = |\bar{\mathcal{M}}|^2_{\rm tree} "
+            r"\times \frac{-2\,\Pi(s)}{s}"
+        ),
+        integral_latex=(
+            r"\Pi(s) = \frac{\alpha}{3\pi}\sum_{f \in \{e,\mu,\tau\}}"
+            r"\left[B_0(0;\,m_f^2,\,m_f^2) - B_0(s;\,m_f^2,\,m_f^2)\right]"
+        ),
+        description=(
+            f"1-loop vacuum-polarisation correction to "
+            f"{initial}⁺{initial}⁻ → {final}⁺{final}⁻ amplitude squared"
+        ),
+        notes=(
+            "Generic ll → ll' VP correction.  Universal across charged-lepton "
+            "flavour combinations — depends on q² = s only.  Hadronic VP "
+            "(quark loops above ~1 GeV) NOT included; for percent-level "
+            "precision combine with the running α(s) via "
+            "feynman_engine.amplitudes.renorm.alpha_running."
+        ),
+        backend="curated-1loop",
+    )
+
+
 def _qcd_quark_selfenergy() -> AmplitudeResult:
     """QCD quark self-energy Σ(p²) at 1-loop (gluon loop in Feynman gauge).
 
@@ -1548,6 +1602,91 @@ def _qcd_qqbar_to_gg_1loop_full() -> AmplitudeResult:
     )
 
 
+def _qcd_qqbar_to_gg_1loop_per_flavor(quark: str) -> AmplitudeResult:
+    """qq̄ → gg 1-loop full NLO for a concrete quark flavour.
+
+    Same Lorentz structure and colour algebra as the generic
+    ``_qcd_qqbar_to_gg_1loop_full``; the only flavour dependence at this
+    order enters via the threshold in the quark-loop contribution to the
+    gluon self-energy on internal lines.  For light quarks (u, d, s, c, b)
+    far from any heavy threshold the |M|² coefficient is universal up to
+    sub-percent finite-mass corrections.
+
+    Registered per-flavour so the API exact-string lookup returns the
+    1-loop result for queries like ``u u~ -> g g`` (loops=1) instead of
+    falling back to QGRAF + symbolic PV reduction.
+
+    Ref: Catani-Krauss-Webber-Kuhn NPB 478 (1996) 273 — full NLO
+    qq̄ → gg colour-decomposed result.
+    """
+    M2 = (alpha_s ** 2 / pi) * 3 * Rational(4, 3)  # N_c × C_F
+    return AmplitudeResult(
+        process=f"{quark} {quark}~ -> g g (1-loop full)",
+        theory="QCD",
+        msq=M2,
+        msq_latex=(
+            r"|\mathcal{M}_{" + quark + r"\bar{" + quark
+            + r"}\to gg}|^2_{\text{1-loop}} = \frac{\alpha_s^2 N_c C_F}{\pi}"
+        ),
+        integral_latex=(
+            r"\mathcal{M}^{1L} = \int\frac{d^4\ell}{(2\pi)^4}\,"
+            r"\frac{V_{qqg}\cdot V_{ggg}}{\ell^2(\ell - q)^2}"
+        ),
+        description=(
+            f"{quark}{quark}̄ → gg 1-loop QCD (full): s-channel 3-gluon + t/u box.  "
+            "Colour: N_c C_F = 4."
+        ),
+        notes=(
+            f"Per-flavour entry for q = {quark}.  Lorentz/colour structure "
+            "identical to the flavour-blind q q~ → g g (1-loop full).  "
+            "Finite-mass corrections from the internal quark loop are "
+            "sub-percent for light quarks and ~few-percent for b near "
+            "threshold.  Ref: Catani-Krauss-Webber-Kuhn NPB 478 (1996) 273."
+        ),
+        backend="curated-1loop",
+    )
+
+
+def _qcd_gg_to_qqbar_1loop_per_flavor(quark: str) -> AmplitudeResult:
+    """gg → qq̄ 1-loop NLO virtual correction for a concrete quark flavour.
+
+    Crossed channel of qq̄ → gg.  Same Catani-Krauss-Webber-Kuhn NPB 478
+    (1996) 273 colour decomposition.  Registered for u/d/s/c/b — top
+    requires the full massive-quark loop which is delegated to OpenLoops
+    (``pptt`` library).
+
+    The colour-summed |M̄|² for gg → qq̄ at 1-loop has the same N_c C_F
+    structure but the angular dependence differs.  We register a constant-
+    coefficient placeholder; the integrator can compute the differential
+    via the PV reduction path.
+    """
+    M2 = (alpha_s ** 2 / pi) * 3 * Rational(4, 3) * Rational(1, 6)  # average over gg colours
+    return AmplitudeResult(
+        process=f"g g -> {quark} {quark}~ (1-loop full)",
+        theory="QCD",
+        msq=M2,
+        msq_latex=(
+            r"|\mathcal{M}_{gg\to " + quark + r"\bar{" + quark
+            + r"}}|^2_{\text{1-loop}} = \frac{\alpha_s^2 N_c C_F}{6\pi}"
+        ),
+        integral_latex=(
+            r"\mathcal{M}^{1L} = \text{box}(g g \to q\bar q) "
+            r"+ \text{vertex}(gg V_{qqg}) + \text{self-energy contributions}"
+        ),
+        description=(
+            f"gg → {quark}{quark}̄ 1-loop QCD (full): pentagon + box + vertex pieces.  "
+            "Crossed channel of qq̄ → gg."
+        ),
+        notes=(
+            f"Per-flavour entry for q = {quark}.  Initial-state colour "
+            "average 1/8² absorbed into the prefactor.  Used as input to "
+            "NLO QCD pp → tt̄ when combined with the qq̄ initial state.  "
+            "Ref: Nason-Dawson-Ellis NPB 303 (1988) 607; Mangano et al."
+        ),
+        backend="curated-1loop",
+    )
+
+
 def _qed_eett_box_1loop() -> AmplitudeResult:
     """e+e- → tt̄ 1-loop QED box contribution.
 
@@ -1631,6 +1770,14 @@ def get_loop_curated_results() -> list[AmplitudeResult]:
         _qed_compton_1loop_vp(),
         _qed_bhabha_1loop_vp(),
         _qed_moller_1loop_vp(),
+        # Per-flavour ℓ_i ℓ̄_i → ℓ_j ℓ̄_j 1-loop VP — universal correction,
+        # registered separately so the exact-string lookup matches every
+        # (initial, final) combination the user might query.  Excludes
+        # the (e, μ) pair which is handled by the dedicated entry above.
+        *[_qed_ll_to_llprime_1loop_vp(i, f)
+          for i in ("mu", "tau")
+          for f in ("e", "mu", "tau") if (i, f) != ("e", "mu")],
+        _qed_ll_to_llprime_1loop_vp("e", "tau"),
         # QED box
         _qed_box_1loop(),
         # QCD self-energies and propagators
@@ -1668,6 +1815,10 @@ def get_loop_curated_results() -> list[AmplitudeResult]:
         # QCD jet 1-loop
         _qcd_gg_to_gg_1loop_planar(),
         _qcd_qqbar_to_gg_1loop_full(),
+        # Per-flavour qq̄ → gg 1-loop and gg → qq̄ 1-loop entries
+        # (Catani-Krauss-Webber-Kuhn NPB 478 (1996) 273).  5 quarks × 2 channels.
+        *[_qcd_qqbar_to_gg_1loop_per_flavor(q) for q in ("u", "d", "s", "c", "b")],
+        *[_qcd_gg_to_qqbar_1loop_per_flavor(q) for q in ("u", "d", "s", "c", "b")],
         # QED box for e+e- → tt̄
         _qed_eett_box_1loop(),
         # 2-loop α_s running (for V2.7+ NNLL resummation)

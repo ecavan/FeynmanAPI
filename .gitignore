@@ -41,3 +41,16 @@ bin/form
 .idea/
 .vscode/
 *.swp
+
+# PLY (Python Lex-Yacc) auto-generated parser tables.  Tools like MadGraph5
+# write `py.py` / `parser.out` in the CWD when first invoked.  A leftover
+# `py.py` shadows the standard `py` package and breaks pytest's terminal
+# writer (`AttributeError: module 'py' has no attribute 'path'`).  Always exclude.
+/py.py
+/parser.out
+
+# MadGraph5 process output directories (written to CWD by `mg5_aMC -f`).
+# These are large (10s of MB) and not part of the engine — outputs of
+# benchmark scripts that should land in /tmp/ or paper/benchmarks/mg5_runs/.
+/mg5_*_run/
+/mg5_*_run.tar.gz

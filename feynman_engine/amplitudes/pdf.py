@@ -277,6 +277,23 @@ class PDFSet:
             return 0.0
         return self.xf(flavor, x, Q2) / x
 
+    # The built-in PDF doesn't have a fitted α_s — by convention treat it
+    # as if it were fit at the engine's reference value (0.118) so the
+    # rescaling factor in cross_section.py is 1.0.
+    alpha_s_mz: float = 0.118
+
+    def alpha_s(self, Q2: float) -> float:
+        """1-loop α_s(Q²) starting from α_s(M_Z²) = 0.118.
+
+        Returned alongside the built-in PDF so generic code can rescale
+        partonic σ̂ regardless of PDF backend.
+        """
+        from feynman_engine.physics.running_coupling import alpha_s_running
+        try:
+            return float(alpha_s_running(Q2))
+        except Exception:
+            return self.alpha_s_mz
+
 
 # ---------------------------------------------------------------------------
 # LHAPDF backend (optional)
@@ -423,6 +440,23 @@ class LHAPDFSet:
         self._x_max = float(self._pdf.xMax)
         self._q2_min = float(self._pdf.q2Min)
         self._q2_max = float(self._pdf.q2Max)
+        # PDF's own α_s — used by the partonic cross-section integrator
+        # to rescale α_s-dependent matrix elements so they match the
+        # PDF's coupling-order convention.  Engine partonic σ̂ formulas
+        # use a fixed ALPHA_S = 0.118; if the PDF was fit at a different
+        # α_s (e.g. CT18LO uses 0.135), pp σ comes out 2-3× off MG5.
+        # This attribute is consumed by cross_section.scale_for_pdf().
+        try:
+            self.alpha_s_mz = float(self._pdf.alphasQ2(91.1876 ** 2))
+        except Exception:
+            self.alpha_s_mz = 0.118  # fallback to engine default
+
+    def alpha_s(self, Q2: float) -> float:
+        """Return α_s(Q²) using the PDF's own running."""
+        try:
+            return float(self._pdf.alphasQ2(Q2))
+        except Exception:
+            return self.alpha_s_mz
 
     def xf(self, flavor: int, x: float, Q2: float) -> float:
         """Return x·f(x, Q²) using the underlying LHAPDF grid."""
@@ -466,13 +500,14 @@ def get_builtin_pdf(name: str = "LO-simple") -> PDFSet:
 
 
 def get_pdf(name: str = "auto", member: int = 0):
-    """Resolve a PDF set by name with auto-fallback.
+    """Resolve a PDF set by name.
 
     Parameters
     ----------
     name : str
-        - ``"auto"`` — use LHAPDF's ``CT18LO`` if available, else built-in
-        - ``"LO-simple"`` — built-in LO parametrization (no external deps)
+        - ``"auto"`` — use LHAPDF's ``CT18LO`` (required; raises if missing)
+        - ``"LO-simple"`` — built-in LO parametrization (escape hatch for
+          tests / offline diagnostics; produces 1/2 to 1/3 of LHC σ_pp)
         - any other string — interpreted as an LHAPDF set name
     member : int
         LHAPDF set member (ignored for built-in).
@@ -481,19 +516,30 @@ def get_pdf(name: str = "auto", member: int = 0):
     -------
     PDFSet or LHAPDFSet — both expose ``xf``, ``f``, ``Q0_sq``, ``name``.
 
-    Notes
-    -----
-    On ``name="auto"``: if either the LHAPDF bindings are missing OR the
-    default ``CT18LO`` set is not installed, this falls back silently to
-    the built-in. Pass an explicit LHAPDF name to surface the error.
+    Raises
+    ------
+    RuntimeError
+        If ``name="auto"`` and LHAPDF + CT18LO are not available.  This is
+        the engine's enforcement of the "no silent factor-of-2-3 LHC σ" promise.
     """
     if name in (None, "", "auto"):
         if _lhapdf_available():
             try:
                 return _get_or_create_lhapdf("CT18LO", member)
-            except RuntimeError:
-                pass
-        return get_builtin_pdf()
+            except RuntimeError as exc:
+                raise RuntimeError(
+                    "LHAPDF is installed but CT18LO is not.  Run "
+                    "`feynman install-pdf-set CT18LO` or `feynman setup --force` "
+                    "to install the default PDF.  "
+                    f"Underlying error: {exc}"
+                ) from exc
+        raise RuntimeError(
+            "LHAPDF + CT18LO is required for hadronic cross-sections but was "
+            "not found.  Run `feynman setup` to build LHAPDF and install "
+            "CT18LO (~5 min, one-time).  If you specifically need the "
+            "built-in LO PDF for offline diagnostics, pass name='LO-simple' "
+            "explicitly — note it gives 1/2 to 1/3 of LHC σ_pp."
+        )
     if name == "LO-simple":
         return get_builtin_pdf()
     return _get_or_create_lhapdf(name, member)

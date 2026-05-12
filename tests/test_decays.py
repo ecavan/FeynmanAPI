@@ -114,17 +114,28 @@ def test_h_to_tautau():
 # ── Pipeline integration ─────────────────────────────────────────────────────
 
 def test_get_amplitude_routes_decay():
-    """get_amplitude() should route 1→2 processes to the decay backend."""
+    """get_amplitude() should route 1→2 decays to a decay-aware backend.
+
+    As of 2026-05-10 a concrete-flavour curated entry for ``Z → ℓ⁺ℓ⁻`` was
+    added (``_ew_z_to_ll_per_flavor``), which takes priority over the
+    FORM-decay backend in the get_amplitude chain.  Both backends produce
+    a valid 1→2 decay |M|² — accept either.
+    """
     result = get_amplitude("Z -> e+ e-", "EW")
     assert result is not None
-    assert result.backend == "form-decay"
+    assert result.backend in ("curated", "form-decay")
 
 
 def test_get_amplitude_routes_decay_higgs():
-    """get_amplitude() should route H → bb̄ through decay backend."""
+    """get_amplitude() should route H → bb̄ through a decay-aware backend.
+
+    Same note as ``test_get_amplitude_routes_decay`` — the new
+    ``_ew_h_to_qqbar_per_flavor`` curated entry takes priority over the
+    older FORM-decay path.  Both produce a valid Yukawa-coupled |M|².
+    """
     result = get_amplitude("H -> b b~", "EW")
     assert result is not None
-    assert result.backend == "form-decay"
+    assert result.backend in ("curated", "form-decay")
 
 
 # ── Edge cases ───────────────────────────────────────────────────────────────

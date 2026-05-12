@@ -131,9 +131,18 @@ def ew_nlo_sudakov_kfactor(
             k_factor=1.0, method="error", trust_level="blocked",
             accuracy_caveat="Process must contain '->'",
         )
-    lhs, rhs = process.split("->")
-    incoming = [p for p in lhs.split() if p]
-    outgoing = [p for p in rhs.split() if p]
+    parts = process.split("->", maxsplit=1)
+    if len(parts) != 2:
+        return EWNLOSudakovResult(
+            process=process, sqrt_s_gev=sqrt_s_gev,
+            incoming=[], outgoing=[], sum_T_eff_sq=0.0,
+            log_squared=0.0, delta_LL=0.0, delta_NLL=0.0,
+            k_factor=1.0, method="error", trust_level="blocked",
+            accuracy_caveat=f"Malformed process string (multiple '->'?): {process!r}",
+        )
+    lhs, rhs = parts
+    incoming = [p for p in lhs.split() if p and p != "->"]
+    outgoing = [p for p in rhs.split() if p and p != "->"]
 
     sum_T_eff_sq = sum(_T_eff_sq(p) for p in incoming + outgoing)
     s = sqrt_s_gev * sqrt_s_gev

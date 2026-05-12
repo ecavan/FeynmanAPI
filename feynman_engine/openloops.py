@@ -258,6 +258,24 @@ def _build_openloops_from_archive(
                 if entry in ("openloops", "scons"):
                     os.chmod(dst, 0o755)
 
+        # The bundled `scons` driver searches for SCons engine files at
+        # `<prefix>/scons-local-X.Y.Z/SCons/...`, but the tarball ships them
+        # one level deeper at `<prefix>/scons-local/scons-local-X.Y.Z/SCons/`.
+        # Without this fix `feynman install-process …` fails with
+        # `ModuleNotFoundError: No module named 'SCons'` whenever the calling
+        # Python interpreter doesn't have a global SCons install on its path.
+        scons_local = install_prefix / "scons-local"
+        if scons_local.is_dir():
+            for child in scons_local.iterdir():
+                if child.is_dir() and child.name.startswith("scons-local-"):
+                    sibling = install_prefix / child.name
+                    if sibling.exists():
+                        continue
+                    try:
+                        sibling.symlink_to(child, target_is_directory=True)
+                    except OSError:
+                        shutil.copytree(child, sibling, symlinks=True)
+
         # Make sure proclib exists so installed_process_libraries() works.
         (install_prefix / "proclib").mkdir(exist_ok=True)
 
@@ -269,6 +287,20 @@ def _build_openloops_from_archive(
 # Curated starter set of OpenLoops process libraries.  See
 # https://openloops.hepforge.org/process_library.php for the full list.
 DEFAULT_PROCESS_LIBRARY = "ppllj"
+
+# Default EW NLO process libraries — installed alongside OpenLoops itself
+# so the Path-A EW NLO finite-virtual machinery (``nlo_ew_finite.py``)
+# works out of the box without an extra ``feynman install-process`` step.
+#
+# - ``eell_ew`` is the smallest EW NLO library (e+e-→ll, ~30 sec compile)
+#   and unblocks the full validation suite for ``ew_virtual_kfactor_openloops``
+#   on lepton-collider 2→2 processes.
+# - ``eella_ew`` adds the radiative process e+e-→ll+γ for the real-emission
+#   integrator (``ew_real_kfactor_openloops``) — ~1 min compile.
+DEFAULT_EW_NLO_LIBRARIES: list[str] = [
+    "eell_ew",   # e+ e- → l+ l- with EW NLO virtual
+    "eella_ew",  # e+ e- → l+ l- + γ for real-emission piece
+]
 
 # Curated starter pack — covers the major LHC analyses (Drell-Yan, top, Higgs,
 # di-boson, VBF, ttH).  Each library is ~50-100 MB after compilation; the

@@ -127,6 +127,26 @@ def _build_coupling_defaults(theory: str) -> dict[str, float]:
     _N_C = 3             # SU(3) colour quanta (kept here so curated amplitudes
                           # using N_c symbolically can substitute it).
 
+    # BSM (Z′ + scalar dark matter) benchmark numerics.  Leptophilic Z′
+    # with g_Zp = 0.1 (LEP-2 dilepton-tail allowed for m_Zp ≳ 200 GeV).
+    # Γ_Zp is computed at runtime from the registered partial widths
+    # rather than read from this table — but we expose a default so curated
+    # |M|² formulas substitute a finite Breit-Wigner regulator on resonance
+    # for users who don't override.
+    _G_ZP = 0.1
+    _M_ZP_DEFAULT = _MASS_GEV.get("m_Zp", 1000.0)
+    _M_CHI_DEFAULT = _MASS_GEV.get("m_chi", 100.0)
+    # Γ_Zp = sum of partial widths.  With universal lepton coupling g_Zp:
+    #   Γ(Z′→ℓℓ̄) = g²m/(12π) × (1 + 2m_ℓ²/m²) ≈ g²m/(12π) per lepton flavour
+    #   Γ(Z′→χχ̄) = g²m β_χ³/(48π) for a complex scalar (β_χ³ p-wave)
+    # Bundled BSM model has e and μ leptons + scalar χ, so:
+    _BETA_CHI_SQ = max(0.0, 1.0 - 4.0 * _M_CHI_DEFAULT**2 / _M_ZP_DEFAULT**2)
+    _BETA_CHI = math.sqrt(_BETA_CHI_SQ) if _BETA_CHI_SQ > 0 else 0.0
+    _GAMMA_ZP = (
+        2 * _G_ZP**2 * _M_ZP_DEFAULT / (12.0 * math.pi)              # e+e- + μ+μ-
+        + _G_ZP**2 * _M_ZP_DEFAULT * _BETA_CHI**3 / (48.0 * math.pi)  # χχ̄ p-wave
+    )
+
     defaults: dict[str, float] = {
         "alpha":   ALPHA_EM,
         "alpha_s": ALPHA_S,
@@ -147,6 +167,32 @@ def _build_coupling_defaults(theory: str) -> dict[str, float]:
         "G_F":     _G_F,
         # Colour quanta in symbolic templates
         "N_c":     _N_C,
+        # BSM Z′ portal couplings — used by curated BSM amplitudes.
+        # Override via `total_cross_section(coupling_vals={"g_Zp": ...})`.
+        "g_Zp":     _G_ZP,
+        "Gamma_Zp": _GAMMA_ZP,
+        # BSM mass symbols — referenced inside BSM |M̄|² formulas via
+        # `m_Zp` and `m_chi`.  Without these in the defaults dict, the
+        # lambdified expression leaves them as free symbols → numerical
+        # nonsense (huge spikes when integrator hits cosθ where the
+        # un-substituted m_Zp evaluates to a small denominator).
+        "m_Zp":     _M_ZP_DEFAULT,
+        "m_chi":    _M_CHI_DEFAULT,
+        # Species-specific Z′ couplings produced by the symbolic backend
+        # (form_trace.py / symbolic.py emit g_Zp_<species> tokens for the
+        # leptophilic Z′ vertex).  Default all to the universal g_Zp value
+        # so the integrator can substitute them; users can override per
+        # flavour via coupling_vals if they want flavour-dependent Z′ models.
+        "g_Zp_e":    _G_ZP,
+        "g_Zp_mu":   _G_ZP,
+        "g_Zp_tau":  _G_ZP,
+        "g_Zp_chi":  _G_ZP,
+        "g_Zp_u":    _G_ZP,
+        "g_Zp_d":    _G_ZP,
+        "g_Zp_s":    _G_ZP,
+        "g_Zp_c":    _G_ZP,
+        "g_Zp_b":    _G_ZP,
+        "g_Zp_t":    _G_ZP,
     }
     # Species-specific Z couplings: g_Z_<fermion> = (g_Z/2) × √(cV² + cA²)
     for fermion, (T3, Q) in _FERMIONS.items():
@@ -281,22 +327,41 @@ def _validate_cross_section_scope(process: str, theory: str):
     UI, but they should not be integrated as if they were full differential
     cross sections.
     """
-    from feynman_engine.physics.amplitude import get_amplitude
+    from feynman_engine.physics.amplitude import get_amplitude, _CURATED
     from feynman_engine.physics.translator import parse_process
 
-    try:
-        spec = parse_process(process.strip(), theory.upper())
-    except ValueError as exc:
-        return None, {"error": str(exc), "supported": False}
+    # Short-circuit when a curated entry exists: the curated formula was
+    # registered with full physics knowledge and may legitimately span
+    # particle types outside the chosen theory's particle list (e.g.
+    # partonic Drell-Yan u u~ → e+ e- registered under "QCD" but with
+    # leptonic final state).  Skipping the parser check here lets such
+    # processes integrate without a spurious "Unknown particle" rejection.
+    has_curated = (process.strip(), theory.upper()) in _CURATED
 
-    if len(spec.incoming) != 2 or len(spec.outgoing) != 2:
-        return None, {
-            "error": (
-                "Cross sections are currently only implemented for 2->2 scattering "
-                f"processes; received {len(spec.incoming)}->{len(spec.outgoing)}."
-            ),
-            "supported": False,
-        }
+    if not has_curated:
+        try:
+            spec = parse_process(process.strip(), theory.upper())
+        except ValueError as exc:
+            return None, {"error": str(exc), "supported": False}
+        if len(spec.incoming) != 2 or len(spec.outgoing) != 2:
+            return None, {
+                "error": (
+                    "Cross sections are currently only implemented for 2->2 scattering "
+                    f"processes; received {len(spec.incoming)}->{len(spec.outgoing)}."
+                ),
+                "supported": False,
+            }
+    else:
+        # Curated entries are guaranteed 2→2 by the cross-section integrator
+        # contract; still confirm by simple string parse for safety.
+        parts = process.strip().split("->", 1)
+        if len(parts) != 2 or len(parts[0].split()) != 2 or len(parts[1].split()) != 2:
+            return None, {
+                "error": (
+                    "Cross sections are currently only implemented for 2->2 scattering."
+                ),
+                "supported": False,
+            }
 
     result = get_amplitude(process.strip(), theory.upper())
     if result is None:
@@ -486,6 +551,9 @@ def differential_cross_section(
     return dsigma * GEV2_TO_PB
 
 
+_TRUST_RANK = {"validated": 3, "approximate": 2, "rough": 1, "blocked": 0}
+
+
 def _attach_trust(result: dict, process: str, theory: str, order: str = "LO") -> dict:
     """Inject trust_level / accuracy_caveat into a cross-section result dict.
 
@@ -493,17 +561,35 @@ def _attach_trust(result: dict, process: str, theory: str, order: str = "LO") ->
     Python users calling total_cross_section[_mc|_vegas]() directly get the
     same trust disclosure.  If trust lookup fails for any reason, the result
     is returned unchanged (no exception propagates from the trust system).
+
+    If the dispatcher (helicity-amplitude module, OL backend, etc.) already
+    set a *more-conservative* trust_level in ``result`` than the static
+    registry, the dispatcher's value wins.  This lets a module flag
+    kinematics-dependent issues (e.g. eν→WZ at low √s is ROUGH while at
+    high √s it's APPROXIMATE) that the static (process, theory, order)
+    key cannot express.
     """
     if not isinstance(result, dict) or not result.get("supported", True):
         return result
     try:
         from feynman_engine.physics.trust import classify
         entry = classify(process.strip(), theory.upper(), order.upper())
-        result["trust_level"] = entry.trust_level.value
+        registry_level = entry.trust_level.value
+        dispatcher_level = result.get("trust_level")
+        if (
+            dispatcher_level
+            and dispatcher_level in _TRUST_RANK
+            and _TRUST_RANK[dispatcher_level] < _TRUST_RANK.get(registry_level, 3)
+        ):
+            # Dispatcher's label is more conservative — keep it and preserve
+            # the dispatcher-supplied caveat (which explains *why* it's lower).
+            pass
+        else:
+            result["trust_level"] = registry_level
+            if entry.accuracy_caveat:
+                result["accuracy_caveat"] = entry.accuracy_caveat
         if entry.reference:
             result["trust_reference"] = entry.reference
-        if entry.accuracy_caveat:
-            result["accuracy_caveat"] = entry.accuracy_caveat
     except Exception:
         pass
     return result
@@ -547,6 +633,141 @@ def total_cross_section(
     from scipy.integrate import quad
 
     s_val = sqrt_s ** 2
+
+    # ── HPZ q q̄ → W+ W- dispatch ────────────────────────────────────────
+    # The full SM tree-level result has 3 diagrams + 3 interferences whose
+    # closed Mandelstam form is too lengthy to write reliably by hand.  We
+    # use the helicity-amplitude evaluator (Hagiwara-Peccei-Zeppenfeld-Hikasa
+    # NPB 282 (1987) 253; verified 97 % vs MG5 LO at √s = 200 GeV) — see
+    # ``feynman_engine.amplitudes.qqbar_ww_helicity``.
+    try:
+        from feynman_engine.amplitudes.qqbar_ww_helicity import (
+            is_supported as _ww_supported, cross_section as _ww_xsec,
+        )
+        proc_strip = process.strip()
+        if _ww_supported(proc_strip):
+            r = _ww_xsec(proc_strip, sqrt_s=sqrt_s)
+            if r.get("supported"):
+                # Translate to the standard cross_section response shape
+                return _attach_trust({
+                    "process": proc_strip,
+                    "theory": theory.upper(),
+                    "sqrt_s_gev": sqrt_s,
+                    "s_gev2": s_val,
+                    "sigma_pb": r["sigma_pb"],
+                    "sigma_uncertainty_pb": 0.0,
+                    "method": r["method"],
+                    "trust_level": r.get("trust_level", "validated"),
+                    "accuracy_caveat": r.get("accuracy_caveat"),
+                    "reference": r.get("reference"),
+                    "supported": True,
+                }, proc_strip, theory.upper(), "LO")
+            return r  # error (e.g. below threshold)
+    except Exception:
+        pass
+
+    # ── CC diboson e ν → W Z dispatch ─────────────────────────────────────
+    # Same machinery as HPZ but for the charged-current channel.  Three
+    # diagrams (t-channel ν, u-channel e, s-channel W*-) summed numerically.
+    try:
+        from feynman_engine.amplitudes.enubar_wz_helicity import (
+            is_supported as _wz_supported, cross_section as _wz_xsec,
+        )
+        proc_strip = process.strip()
+        if _wz_supported(proc_strip):
+            r = _wz_xsec(proc_strip, sqrt_s=sqrt_s)
+            if r.get("supported"):
+                return _attach_trust({
+                    "process": proc_strip,
+                    "theory": theory.upper(),
+                    "sqrt_s_gev": sqrt_s,
+                    "s_gev2": s_val,
+                    "sigma_pb": r["sigma_pb"],
+                    "sigma_uncertainty_pb": 0.0,
+                    "method": r["method"],
+                    "trust_level": r.get("trust_level", "approximate"),
+                    "accuracy_caveat": r.get("accuracy_caveat"),
+                    "reference": r.get("reference"),
+                    "supported": True,
+                }, proc_strip, theory.upper(), "LO")
+            return r
+    except Exception:
+        pass
+
+    # ── Massive ee → tt̄ dispatch ──────────────────────────────────────────
+    # Closed-form γ+Z amplitude with proper β factor.  Routes BEFORE the OL
+    # fallback because OL+RAMBO has on-shell-condition warnings and gives
+    # wrong σ near tt̄ threshold (verified vs MG5 2026-05-11: OL+RAMBO is
+    # +516% at √s=350, +35% at √s=500, then converges at √s ≥ 1 TeV).
+    try:
+        from feynman_engine.amplitudes.ee_to_tt_massive import (
+            is_supported as _tt_supported, cross_section as _tt_xsec,
+        )
+        proc_strip = process.strip()
+        if _tt_supported(proc_strip):
+            r = _tt_xsec(proc_strip, sqrt_s=sqrt_s)
+            if r.get("supported"):
+                return _attach_trust({
+                    "process": proc_strip,
+                    "theory": theory.upper(),
+                    "sqrt_s_gev": sqrt_s,
+                    "s_gev2": s_val,
+                    "sigma_pb": r["sigma_pb"],
+                    "sigma_uncertainty_pb": 0.0,
+                    "method": r["method"],
+                    "trust_level": r.get("trust_level", "validated"),
+                    "accuracy_caveat": r.get("accuracy_caveat"),
+                    "reference": r.get("reference"),
+                    "supported": True,
+                }, proc_strip, theory.upper(), "LO")
+            return r
+    except Exception:
+        pass
+
+    # ── ee → ZZ helicity-amplitude dispatch ──────────────────────────────
+    # Routes BEFORE the symbolic backend because the older Dirac-trace
+    # evaluator (in physics/amplitude.py _zz_msq_numerical) used a
+    # transverse-only polarization sum that under-counted σ by ~20% near
+    # threshold.  The new helicity-amplitude evaluator handles full
+    # polarization (including longitudinal Z) correctly.  Verified vs MG5
+    # v3.7.1 2026-05-11: -4.0% at √s=200 GeV, -0.7% at √s=500 GeV.
+    try:
+        from feynman_engine.amplitudes.ee_zz_helicity import (
+            is_supported as _zz_supported, cross_section as _zz_xsec,
+        )
+        proc_strip = process.strip()
+        if _zz_supported(proc_strip):
+            r = _zz_xsec(proc_strip, sqrt_s=sqrt_s)
+            if r.get("supported"):
+                return _attach_trust({
+                    "process": proc_strip,
+                    "theory": theory.upper(),
+                    "sqrt_s_gev": sqrt_s,
+                    "s_gev2": s_val,
+                    "sigma_pb": r["sigma_pb"],
+                    "sigma_uncertainty_pb": 0.0,
+                    "method": r["method"],
+                    "trust_level": r.get("trust_level", "validated"),
+                    "accuracy_caveat": r.get("accuracy_caveat"),
+                    "reference": r.get("reference"),
+                    "supported": True,
+                }, proc_strip, theory.upper(), "LO")
+            return r
+    except Exception:
+        pass
+
+    # Quick check: if amplitude routes to OL backend, skip the 2→2-only
+    # validation and use OL Born + RAMBO MC for any 2→N.
+    try:
+        from feynman_engine.physics.amplitude import get_amplitude
+        _amp_check = get_amplitude(process.strip(), theory.upper())
+        if _amp_check is not None and _amp_check.backend == "openloops":
+            return _total_cross_section_openloops_fallback(
+                process=process, theory=theory, sqrt_s=sqrt_s,
+            )
+    except Exception:
+        pass
+
     result, error = _validate_cross_section_scope(process, theory)
     if error is not None:
         return error
@@ -1137,3 +1358,162 @@ def total_cross_section_vegas(
         "converged": vresult["converged"],
         "supported": True,
     }, process, theory, "LO")
+
+
+# ─── OpenLoops Tier-4 fallback for σ_LO ────────────────────────────────────
+
+def _total_cross_section_openloops_fallback(
+    process: str,
+    theory: str,
+    sqrt_s: float,
+    n_events: int = 20000,
+    seed: int = 42,
+) -> dict:
+    """Compute σ_LO via OpenLoops Born + RAMBO when no curated |M|² exists.
+
+    Used when ``get_amplitude`` falls back to ``backend="openloops"``.
+    Routes through OL's compiled tree library at the inferred coupling
+    orders and integrates over phase space with Python-side RAMBO so the
+    seed is reproducible.
+
+    Returns the same dict shape as ``total_cross_section`` so callers
+    don't need to special-case OL output.
+    """
+    import numpy as np
+    from feynman_engine.amplitudes.openloops_bridge import (
+        is_available, register_process_with_orders,
+        _CwdInPrefix, _register_lock, OpenLoopsRegistrationError,
+    )
+    from feynman_engine.amplitudes.phase_space import (
+        rambo_massless, GEV2_TO_PB,
+    )
+
+    if not is_available():
+        return {
+            "error": "OpenLoops not available — install via `feynman install-openloops`.",
+            "supported": False,
+            "process": process,
+            "theory": theory,
+        }
+
+    if "->" not in process:
+        return {"error": "Process must contain '->'", "supported": False}
+    parts = process.split("->", maxsplit=1)
+    incoming = [p for p in parts[0].split() if p]
+    outgoing = [p for p in parts[1].split() if p]
+    n_in = len(incoming)
+    n_out = len(outgoing)
+
+    if n_in != 2:
+        return {
+            "error": f"OL fallback supports 2→N only (got {n_in}→{n_out}).",
+            "supported": False,
+        }
+
+    # Threshold check — RAMBO doesn't enforce kinematic threshold and
+    # would happily compute |M̄|² at unphysical phase-space points,
+    # returning nonsense σ.  Compute sum of final-state masses and
+    # reject if √s is below it.
+    _MASS_GEV = {
+        "t": 172.69, "t~": 172.69,
+        "W+": 80.38, "W-": 80.38, "Z": 91.19, "H": 125.25, "h": 125.25,
+        "b": 4.18, "b~": 4.18, "c": 1.275, "c~": 1.275,
+        "tau+": 1.777, "tau-": 1.777,
+    }
+    sum_mass = sum(_MASS_GEV.get(p, 0.0) for p in outgoing)
+    if sqrt_s < sum_mass:
+        return {
+            "error": (
+                f"√s = {sqrt_s:.3f} GeV is below the production threshold "
+                f"({sum_mass:.3f} GeV) for outgoing {outgoing}."
+            ),
+            "supported": False,
+        }
+
+    # Pick OL orders: prefer the INFERRED leading orders first, since
+    # `*_ew` libraries (eell_ew, eevv_ew, ...) have multiple channels at
+    # different α orders and `(-1, -1)` would sum them.  Fall back to
+    # library default only if the leading orders fail to register.
+    from feynman_engine.amplitudes.openloops_amplitude import infer_leading_orders
+    leading_qcd, leading_ew = infer_leading_orders(process)
+
+    proc = None
+    last_err = None
+    for oqcd, oew in [(leading_qcd, leading_ew), (-1, -1)]:
+        try:
+            proc = register_process_with_orders(
+                process, amptype="tree",
+                order_qcd=oqcd, order_ew=oew,
+                loop_order_qcd=-1, loop_order_ew=-1,
+            )
+            break
+        except OpenLoopsRegistrationError as exc:
+            last_err = exc
+            continue
+    if proc is None:
+        return {
+            "error": f"OL tree registration failed for all order attempts: {last_err}",
+            "supported": False,
+        }
+
+    # Build initial-state momenta (massless eikonal back-to-back)
+    E = sqrt_s / 2.0
+    p1 = np.array([E, 0.0, 0.0,  E])
+    p2 = np.array([E, 0.0, 0.0, -E])
+
+    rng = np.random.default_rng(seed)
+    momenta, weights = rambo_massless(n_out, sqrt_s, n_events, rng)
+
+    msq_vals = np.zeros(n_events, dtype=np.float64)
+    with _register_lock, _CwdInPrefix():
+        for ev in range(n_events):
+            pp = np.zeros(5 * (n_in + n_out), dtype=np.float64)
+            pp[0:4] = p1; pp[4] = 0.0
+            pp[5:9] = p2; pp[9] = 0.0
+            for k in range(n_out):
+                pp[5 * (2 + k): 5 * (2 + k) + 4] = momenta[ev, k, :]
+                pp[5 * (2 + k) + 4] = 0.0
+            try:
+                me = proc.evaluate(pp)
+                msq_vals[ev] = max(0.0, float(me.tree))
+            except Exception:
+                msq_vals[ev] = 0.0
+
+    s_val = sqrt_s * sqrt_s
+    weight_per_ev_gev2 = msq_vals * weights / (2.0 * s_val) / n_events
+    sigma_gev2 = float(np.sum(weight_per_ev_gev2))
+    sigma_uncertainty_gev2 = float(
+        np.std(weight_per_ev_gev2 * n_events) / np.sqrt(n_events)
+    )
+
+    # Apply identical-final-state 1/n! symmetry factor (P&S eq. 5.107
+    # convention).  OL evaluates |M|² as if final-state particles were
+    # distinguishable; for identical particles the σ_physical = σ_raw / n!.
+    sym_factor = _identical_particle_symmetry_factor(outgoing)
+    if sym_factor > 1:
+        sigma_gev2 /= sym_factor
+        sigma_uncertainty_gev2 /= sym_factor
+
+    sigma_pb = sigma_gev2 * GEV2_TO_PB
+    sigma_uncertainty_pb = sigma_uncertainty_gev2 * GEV2_TO_PB
+
+    return {
+        "process": process,
+        "theory": theory,
+        "sqrt_s_gev": sqrt_s,
+        "s_gev2": s_val,
+        "sigma_pb": sigma_pb,
+        "sigma_uncertainty_pb": sigma_uncertainty_pb,
+        "n_events": n_events,
+        "identical_particle_factor": sym_factor,
+        "method": "openloops-tree-plus-rambo",
+        "backend": "openloops",
+        "trust_level": "approximate",
+        "accuracy_caveat": (
+            "σ_LO via OpenLoops Born + RAMBO Monte Carlo "
+            f"({n_events} events).  No symbolic |M|² — accuracy depends on "
+            "OL's compiled tree library for this process.  "
+            f"Identical-particle factor 1/{sym_factor}! applied."
+        ),
+        "supported": True,
+    }

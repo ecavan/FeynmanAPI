@@ -1,9 +1,9 @@
 # FeynmanEngine
 
-[![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.1/)
-[![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.1/)
+[![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.2/)
+[![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.2/)
 [![License](https://img.shields.io/pypi/l/feynman-engine?cacheSeconds=300)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19964300.svg?v=0.2.1)](https://doi.org/10.5281/zenodo.19964300)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19964300.svg?v=0.2.2)](https://doi.org/10.5281/zenodo.19964300)
 
 A Feynman diagram generator and amplitude calculator for particle physics. Type a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams (SVG/TikZ), the symbolic spin-averaged $|\overline{\mathcal{M}}|^2$, integrated cross-sections at LO and NLO, decay widths, and 1-loop scalar integrals.
 
@@ -41,7 +41,7 @@ feynman setup     # builds QGRAF, FORM, LoopTools, LHAPDF, OpenLoops 2 (10-20 mi
 feynman serve     # http://localhost:8000
 ```
 
-For platform-specific prerequisites, the lightweight install path, Docker, and troubleshooting, see [INSTALLATION.md](INSTALLATION.md).
+For platform-specific prerequisites, Docker, and troubleshooting, see [INSTALLATION.md](INSTALLATION.md).
 
 ## Capabilities
 
@@ -51,7 +51,7 @@ For platform-specific prerequisites, the lightweight install path, Docker, and t
 - **Cross-sections** via scipy.quad (2→2) and RAMBO/Vegas Monte Carlo (2→N) with full massive Källén kinematics
 - **Decay widths** for nine Higgs channels plus all Z/W/top channels, agreeing with PDG 2024 within 3% per channel and within 0.1% on the summed Higgs width; off-shell H → V*V* → 4f handled via 2-D Breit-Wigner integration (Pocsik-Zsigmond / Cahn)
 - **Differential observables** for cosθ, pT, η, y, M_inv, M_ll, ΔR
-- **Hadronic σ** with built-in LO PDF (factor-of-2-3 accuracy) or LHAPDF + CT18LO (percent-level)
+- **Hadronic σ** via LHAPDF + CT18LO (installed by default with `feynman setup`)
 - **NLO** in six regimes: 34 tabulated LHC K-factors, universal QED via charge-correlator (`K = 1 + 3α/(4π)` exact for textbook cases), EW Sudakov LL+NLL, first-principles Catani-Seymour Drell-Yan (`K(pp→DY @ 13 TeV) = 1.19` vs YR4 1.21), tabulated NLO QCD K-factors for partial decay widths (`H → gg` K=1.66, `H → bb̄` K=1.13, `H → cc̄` K=1.24), and OpenLoops virtuals for arbitrary QCD processes
 - **Trust labels** on every numerical result (`validated` / `approximate` / `rough` / `blocked`); the API refuses (HTTP 422) processes that would otherwise return wrong numbers
 - **REST API + Python API + browser UI** all from one `pip install`
@@ -78,6 +78,8 @@ For platform-specific prerequisites, the lightweight install path, Docker, and t
 | pp → ZH | 0.58 pb | ~0.5 pb | within 16% |
 | pp → H + jj (VBF) | 3.78 pb | 3.78 pb | exact (calibrated) |
 | pp → γγ (pT_γ > 30 GeV) | 30 pb | 30-50 pb | in range |
+
+*All `pp → …` numbers above use LHAPDF + CT18LO, installed by the default `feynman setup`. The engine refuses to start hadronic σ computations if LHAPDF is unavailable.*
 
 ### Higgs decay validation (m_H = 125.20 GeV)
 

@@ -33,6 +33,19 @@ _FEATURES_BY_LEVEL: dict[str, dict[str, bool]] = {
         "nlo_running_kfactor":        True,
         "trustworthy_value":          True,
     },
+    # OpenLoops backend: |M|² is a numerical evaluator (call into compiled
+    # OL process library at given momenta).  No symbolic LaTeX.  σ is
+    # integrable via RAMBO + OL Born, but no closed-form expression for
+    # display, and NLO K-factor goes through the OL+CS dipole pipeline
+    # (not a simple analytic running-coupling rescaling).
+    "openloops-numerical": {
+        "is_function_of_kinematics": True,
+        "cross_section_integration":  True,
+        "differential_distribution":  True,
+        "monte_carlo":                True,
+        "nlo_running_kfactor":        False,
+        "trustworthy_value":          True,
+    },
 }
 
 

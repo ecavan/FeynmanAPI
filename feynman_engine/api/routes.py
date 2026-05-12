@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import math
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
@@ -255,10 +256,18 @@ def get_amplitude_endpoint(
                     evaluation_point=None,
                 )
 
-    try:
-        parse_process(process_clean, theory_upper, loops=loops)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+    # Bypass particle-name validation if a curated entry exists for this
+    # (process, theory) — curated formulas are registered by hand with full
+    # physics knowledge and may legitimately span particle types outside the
+    # chosen theory's particle list (e.g. partonic Drell-Yan u u~ → e+ e-
+    # registered under "QCD" but with leptonic final state).
+    from feynman_engine.physics.amplitude import _CURATED
+    has_curated_tree = (process_clean, theory_upper) in _CURATED
+    if not has_curated_tree:
+        try:
+            parse_process(process_clean, theory_upper, loops=loops)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     if loops == 0:
         result = get_amplitude(process_clean, theory_upper)
@@ -269,19 +278,34 @@ def get_amplitude_endpoint(
         integral_latex = getattr(result, "integral_latex", None)
         if not integral_latex:
             # The integral expression comes from QGRAF diagram generation,
-            # which can fail for cross-theory processes (e.g. bb̄→γγ in pure
-            # QCD model has no photon vertex).  The curated |M̄|² is still
-            # valid; just omit the integral expression in that case.
-            try:
-                integral_latex = (
-                    get_tree_integral_latex(process_clean, theory_upper)
-                    if loops == 0
-                    else get_loop_integral_latex(process_clean, theory_upper, loops=loops)
-                )
-            except Exception:
-                integral_latex = None
+            # which uses theory-specific model files.  For cross-theory
+            # processes (e.g. partonic Drell-Yan u u~ → e+ e- registered
+            # as QCD but with leptonic final state), the strict theory's
+            # model lacks the needed vertices.  Try the requested theory
+            # first, then a more permissive fallback chain that covers
+            # mixed-theory diagrams.
+            fallback_theories: list[str] = [theory_upper]
+            for ft in ("QCDQED", "EW", "QED", "QCD"):
+                if ft != theory_upper and ft not in fallback_theories:
+                    fallback_theories.append(ft)
+            for try_theory in fallback_theories:
+                try:
+                    integral_latex = (
+                        get_tree_integral_latex(process_clean, try_theory)
+                        if loops == 0
+                        else get_loop_integral_latex(process_clean, try_theory, loops=loops)
+                    )
+                except Exception:
+                    integral_latex = None
+                if integral_latex:
+                    break
         has_msq = result.msq is not None
         features = getattr(result, "features", None) or {}
+        # OL-backed amplitudes have no symbolic |M|², but the cross-section,
+        # decay-width, and differential endpoints all work via the numerical
+        # OL evaluator — so they are still "supported" in the API sense.
+        is_openloops_backend = getattr(result, "backend", None) == "openloops"
+        supported_flag = has_msq or is_openloops_backend
 
         return AmplitudeResponse(
             process=result.process,
@@ -293,7 +317,7 @@ def get_amplitude_endpoint(
             integral_latex=integral_latex,
             notes=result.notes,
             backend=getattr(result, "backend", None),
-            supported=has_msq,
+            supported=supported_flag,
             has_msq=has_msq,
             has_integral=bool(integral_latex),
             availability_message=(
@@ -729,18 +753,20 @@ def get_cross_section(
     # ── Trust gate ─────────────────────────────────────────────────────
     trust_entry = classify(process.strip(), trust_theory, order)
     if trust_entry.trust_level == TrustLevel.BLOCKED:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "process": process.strip(),
-                "theory": trust_theory.upper() if trust_theory else theory.upper(),
-                "order": order.upper(),
-                "trust_level": "blocked",
-                "block_reason": trust_entry.block_reason,
-                "workaround": trust_entry.workaround,
-                "reference": trust_entry.reference,
-            },
-        )
+        detail = {
+            "process": process.strip(),
+            "theory": trust_theory.upper() if trust_theory else theory.upper(),
+            "order": order.upper(),
+            "trust_level": "blocked",
+            "block_reason": trust_entry.block_reason,
+            "workaround": trust_entry.workaround,
+            "reference": trust_entry.reference,
+        }
+        # Surface OpenLoops install suggestion when the catalog has a match
+        # for this process — lets the frontend show a one-click install button.
+        if trust_entry.install_suggestion:
+            detail["install_suggestion"] = trust_entry.install_suggestion
+        raise HTTPException(status_code=422, detail=detail)
 
     # ── Hadronic route (detect "p p ->" processes) ────────────────────
     if is_hadronic:
@@ -793,13 +819,22 @@ def get_cross_section(
     if alpha_s is not None:
         coupling_overrides["alpha_s"] = alpha_s
 
-    # Detect multiplicity to route to the right integrator.
-    try:
-        spec = parse_process(process.strip(), theory.upper())
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-    n_out = len(spec.outgoing)
+    # Detect multiplicity to route to the right integrator.  Bypass particle
+    # validation if a curated entry exists (some curated formulas span
+    # particle types outside the chosen theory's particle list — e.g.
+    # partonic Drell-Yan u u~ → e+ e- registered as "QCD").
+    from feynman_engine.physics.amplitude import _CURATED
+    proc_strip = process.strip()
+    if (proc_strip, theory.upper()) in _CURATED:
+        # Quick string-parse for multiplicity; no theory validation.
+        parts = proc_strip.split("->", 1)
+        n_out = len(parts[1].split()) if len(parts) == 2 else 0
+    else:
+        try:
+            spec = parse_process(proc_strip, theory.upper())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        n_out = len(spec.outgoing)
 
     if n_out == 2 and method != "vegas":
         result = total_cross_section(
@@ -835,6 +870,9 @@ def get_cross_section(
         # Missing-|M|² / unregistered process → 404 (resource not found).
         is_kinematic_error = (
             "below the production threshold" in err
+            or "below the W+W- threshold" in err
+            or "below the W-Z threshold" in err
+            or "below threshold" in err.lower()
             or "must be positive" in err
             or "must be > 0" in err
         )
@@ -1112,13 +1150,43 @@ def get_decay_width(
                 status_code=422,
                 detail=f"Could not parse '{proc_clean}': {exc}",
             )
-    if len(spec.incoming) != 1 or len(spec.outgoing) != 2:
+    if len(spec.incoming) != 1:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Decay-width endpoint requires a 1→2 process (got "
-                f"{len(spec.incoming)}→{len(spec.outgoing)}).  "
+                f"Decay-width endpoint requires a 1→N decay (got "
+                f"{len(spec.incoming)} incoming particles).  "
                 "Use /api/amplitude/cross-section for 2→N scattering."
+            ),
+        )
+
+    # 1→3 path: Sargent-Cabibbo closed form for Fermi-theory leptonic
+    # and semileptonic decays (μ→eν̄ν, τ→ℓν̄ν, τ→qq̄ν_τ, b→cℓν̄, c→sℓν).
+    # No phase-space integration — analytic Γ = G_F²·M⁵/(192π³) · f(r) ·
+    # N_c · |V_CKM|².
+    if len(spec.outgoing) == 3:
+        from feynman_engine.amplitudes.three_body_decays import (
+            three_body_fermi_width,
+        )
+        r3 = three_body_fermi_width(proc_clean)
+        if r3 is None:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"3-body decay '{proc_clean}' does not match a Sargent "
+                    "template (μ/τ → ℓ ν̄ ν, τ → qq̄' ν_τ, or heavy-quark "
+                    "semileptonic b/c → q' ℓ ν).  General 1→3 phase-space "
+                    "integration planned for v0.3+."
+                ),
+            )
+        return r3
+
+    if len(spec.outgoing) != 2:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Decay-width endpoint supports 1→2 (general curated) or "
+                f"1→3 (Sargent Fermi formula).  Got 1→{len(spec.outgoing)}."
             ),
         )
 
@@ -1437,8 +1505,12 @@ def get_openloops_virtual_k(
 def get_nlo_general(
     process: str = Query(..., description="Born process e.g. 'u u~ -> e+ e-'"),
     sqrt_s:  float = Query(..., description="Partonic centre-of-mass energy in GeV"),
-    n_events: int = Query(default=5000, description="MC samples for the real-emission integral"),
+    n_events: int = Query(default=20000, description="MC samples for the real-emission integral"),
     alpha_s: float = Query(default=0.118, description="α_s value"),
+    use_vegas: bool = Query(default=True, description="Use Vegas adaptive sampling (recommended) instead of flat RAMBO"),
+    n_vegas_iter: int = Query(default=5, ge=2, le=20, description="Vegas adaptation iterations"),
+    min_pT_gev: float = Query(default=0.0, description="Minimum gluon pT (GeV) for the real-emission integral.  Tames soft variance."),
+    min_invariant_mass_gev: float = Query(default=0.0, description="Minimum extra-jet invariant mass (GeV).  Tames collinear variance."),
 ):
     """Compute σ_NLO for an arbitrary Born process using:
 
@@ -1511,12 +1583,53 @@ def get_nlo_general(
             sigma_born_pb=sigma_born_pb,
             n_events_real=n_events,
             alpha_s=alpha_s,
+            use_vegas=use_vegas,
+            n_vegas_iter=n_vegas_iter,
+            min_pT_gev=min_pT_gev,
+            min_invariant_mass_gev=min_invariant_mass_gev,
         )
     except Exception as exc:
         raise HTTPException(
             status_code=422,
             detail={
                 "error": f"Generic NLO computation failed: {type(exc).__name__}: {exc}",
+            },
+        )
+
+    # Sanity guard: physical K-factors for QCD NLO at unresolved-real cuts
+    # should fall in ~[0.7, 2.5].  If the integration returned σ_NLO < 0 or
+    # a K-factor outside [0.3, 5], the MC has not converged at this phase-
+    # space point — block the response so users don't see nonsense.
+    k = result.k_factor
+    sigma_nlo = result.sigma_nlo_pb
+    if not math.isfinite(k) or sigma_nlo < 0.0 or k < 0.3 or k > 5.0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "process": result.process,
+                "trust_level": "blocked",
+                "block_reason": (
+                    f"NLO Monte-Carlo did not converge at this kinematic point "
+                    f"(K = {k:.3f}, σ_NLO = {sigma_nlo:.4g} pb).  Real-emission "
+                    "integral is dominated by IR singularities; the dipole "
+                    "subtraction's MC variance cannot be controlled at flat "
+                    "RAMBO sampling here."
+                ),
+                "workaround": (
+                    "Try larger n_events (50000-100000), enable use_vegas=true "
+                    "(default), and/or add min_pT_gev=10 to tame soft-gluon "
+                    "variance.  For pp → tt̄ NLO QCD use the tabulated K-factor "
+                    "via /api/amplitude/cross-section?order=NLO."
+                ),
+                "diagnostic": {
+                    "sigma_born_pb": result.sigma_born_pb,
+                    "sigma_virtual_plus_idipole_pb": result.sigma_virtual_plus_idipole_pb,
+                    "sigma_real_minus_dipoles_pb": result.sigma_real_minus_dipoles_pb,
+                    "sigma_nlo_pb": sigma_nlo,
+                    "k_factor": k,
+                    "n_events_real": n_events,
+                    "use_vegas": use_vegas,
+                },
             },
         )
 
@@ -1534,6 +1647,7 @@ def get_nlo_general(
         "accuracy_caveat": result.accuracy_caveat,
         "notes": result.notes,
         "n_events_real": n_events,
+        "use_vegas": use_vegas,
         "alpha_s": alpha_s,
     }
 
@@ -1600,6 +1714,139 @@ def get_openloops_loop_induced(
         "process.  Use /amplitude/openloops-virtual-k for the K-factor instead."
     )
     return result
+
+
+@router.get(
+    "/amplitude/nlo-ew-finite",
+    summary="EW NLO K-factor via OpenLoops finite virtual + universal QED (Path-A)",
+)
+def get_nlo_ew_finite(
+    process: str = Query(..., description="Process e.g. 'e+ e- -> mu+ mu-'"),
+    sqrt_s: float = Query(..., description="Centre-of-mass energy in GeV"),
+    n_psp_samples: int = Query(default=30, description="OL phase-space samples to average"),
+    prefer_openloops: bool = Query(
+        default=True,
+        description="Use OpenLoops EW NLO library if installed; else use Sudakov fallback",
+    ),
+):
+    """Generic EW NLO K-factor for arbitrary processes (Path-A).
+
+    Combines:
+      1. **OpenLoops 2 finite virtual** (γ + Z + W + H + t loops with full
+         mass dependence in the G_μ scheme) when an EW NLO process library
+         is installed (e.g. ``eell_ew`` for e+e-→ll, ``ppllj_ew`` for DY).
+      2. **Universal QED inclusive** K = 1 + 3α/(4π) Σ Q² × C_universal
+         for the photon real-emission piece.
+      3. **Sudakov LL+NLL** as analytic fallback when no OL library is
+         installed.
+
+    Reports a universal IR-pole closure check: ir2/tree should equal
+    -(α/(2π)) × Σ_legs Q_i² (Catani structure).  Residue should be < 1%.
+
+    Sample EW NLO process libraries:
+      - ``eell_ew``       e+ e- → l+ l-
+      - ``eett_ew``       e+ e- → t t~
+      - ``ppllj_ew``      pp → l+ l- + jet
+      - ``pp2l2nj_ew``    pp → l+ l- (Drell-Yan, jet-inclusive)
+      - ``pptt_ew``       pp → t t~
+      - ``ppvv_ew``       pp → V V
+
+    Install via ``feynman install-process <name>``.
+
+    Returns
+    -------
+    JSON with K_EW, σ_LO, σ_NLO_EW, decomposition pieces (δ_QED, δ_V_OL,
+    δ_Sudakov), trust level, and IR-pole closure diagnostic.
+    """
+    from feynman_engine.amplitudes.nlo_ew_finite import ew_nlo_cross_section
+    from feynman_engine.amplitudes.openloops_bridge import (
+        is_available as openloops_available,
+        ew_nlo_library_for, installed_processes,
+    )
+
+    proc_clean = process.strip()
+
+    # Boundary validation: cheap to do up front for clear 4xx errors
+    if not proc_clean or "->" not in proc_clean:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "Process must contain '->' (e.g. 'e+ e- -> mu+ mu-').",
+                "got": process,
+            },
+        )
+    if sqrt_s <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "sqrt_s must be positive.",
+                "got": sqrt_s,
+            },
+        )
+    # Cap n_psp_samples to avoid runaway resource use from a malicious caller
+    n_psp_samples = max(1, min(int(n_psp_samples), 500))
+
+    libname = ew_nlo_library_for(proc_clean)
+
+    try:
+        result = ew_nlo_cross_section(
+            proc_clean,
+            sqrt_s_gev=float(sqrt_s),
+            n_psp_samples=n_psp_samples,
+            prefer_openloops=bool(prefer_openloops),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": f"EW NLO computation failed: {type(exc).__name__}: {exc}",
+                "openloops_available": openloops_available(),
+                "expected_library": libname,
+                "library_installed": (
+                    libname in installed_processes() if libname else False
+                ),
+                "installed_libraries": installed_processes(),
+            },
+        )
+
+    if result.method == "error":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": result.accuracy_caveat or "EW NLO failed",
+                "expected_library": libname,
+                "installed_libraries": installed_processes(),
+                "hint": (
+                    f"Run `feynman install-process {libname}` to enable the "
+                    f"OpenLoops finite-virtual path; otherwise the Sudakov "
+                    f"LL+NLL fallback applies."
+                    if libname else
+                    "No EW NLO library mapping for this process; Sudakov LL+NLL "
+                    "fallback applies."
+                ),
+            },
+        )
+
+    return {
+        "process": result.process,
+        "sqrt_s_gev": result.sqrt_s_gev,
+        "incoming": result.incoming,
+        "outgoing": result.outgoing,
+        "k_factor": result.k_factor,
+        "delta_total": result.delta_total,
+        "delta_qed_universal": result.delta_qed_universal,
+        "delta_sudakov": result.delta_sudakov,
+        "delta_virtual_ol_bare": result.delta_virtual_ol_bare,
+        "ol_pole_2_residue": result.pole_2_residue,
+        "sigma_lo_pb": result.sigma_lo_pb,
+        "sigma_nlo_pb": result.sigma_nlo_pb,
+        "method": result.method,
+        "ew_nlo_library": result.library_ol,
+        "trust_level": result.trust_level,
+        "accuracy_caveat": result.accuracy_caveat,
+        "notes": result.notes,
+        "supported": True,
+    }
 
 
 @router.get("/amplitude/loop-analytic",
@@ -1981,3 +2228,145 @@ def get_differential_distribution(
 @router.get("/amplitude/processes", summary="List processes with pre-computed amplitudes")
 def list_amplitude_processes():
     return list_supported_processes()
+
+
+# ─── OpenLoops catalog endpoints (frontend "calculator" UX) ─────────────────
+
+@router.get(
+    "/openloops/packs",
+    summary="List OpenLoops process packs (textbook, lhc-higgs, …) with size/time estimates",
+)
+def list_openloops_packs():
+    """Return every semantic pack with its resolved library list and an
+    honest disk + build-time estimate.
+
+    The frontend uses this to render a setup wizard or a per-process
+    "needs library X" install button.
+    """
+    from feynman_engine.resources.openloops import PACKS, pack_summary
+    return {"packs": {name: pack_summary(name) for name in PACKS}}
+
+
+@router.get(
+    "/openloops/installed",
+    summary="List OpenLoops process libraries currently installed",
+)
+def list_openloops_installed():
+    """Return the names of every OL library compiled into the local install."""
+    try:
+        from feynman_engine.amplitudes.openloops_bridge import (
+            installed_processes, is_available,
+        )
+        return {
+            "available": is_available(),
+            "installed": installed_processes() if is_available() else [],
+        }
+    except Exception as exc:
+        return {"available": False, "installed": [], "error": str(exc)}
+
+
+@router.get(
+    "/openloops/lookup",
+    summary="Look up which OpenLoops libraries cover a given process",
+)
+def openloops_lookup(
+    process: str = Query(..., description="e.g. 'p p -> H H' or 'g g -> t t~'"),
+):
+    """Catalog lookup — returns covering libraries (installed + available)."""
+    try:
+        from feynman_engine.resources.openloops import (
+            libraries_for_process, library_meta, estimate_install,
+        )
+        from feynman_engine.amplitudes.openloops_bridge import installed_processes
+        candidates = libraries_for_process(process.strip())
+        already = set(installed_processes())
+        return {
+            "process": process.strip(),
+            "candidates": [
+                {
+                    "library":  lib,
+                    "installed": lib in already,
+                    "meta":     library_meta(lib),
+                    "estimate": estimate_install([lib]),
+                    "install_command": f"feynman install-process {lib}",
+                }
+                for lib in candidates
+            ],
+            "n_candidates": len(candidates),
+        }
+    except Exception as exc:
+        return {"process": process.strip(), "error": str(exc), "candidates": []}
+
+
+@router.post(
+    "/openloops/install",
+    summary="Start an OpenLoops process-library install in the background",
+)
+def openloops_install(
+    library: str = Query(..., description="OL library name, e.g. 'pphh2'"),
+):
+    """Kick off `feynman install-process <library>` on a background thread.
+
+    Returns a job snapshot immediately; poll
+    `/api/openloops/install/status?library=<name>` for progress.  If the
+    library is already installed or a job is already running, the
+    response reflects that state instead of starting a new build.
+    """
+    from feynman_engine.resources.openloops import library_meta
+    from feynman_engine.amplitudes.openloops_install_jobs import start_install
+    if library_meta(library) is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Unknown OpenLoops library {library!r} (not in the public "
+                "catalog).  Use GET /api/openloops/packs to browse available "
+                "libraries."
+            ),
+        )
+    return start_install(library)
+
+
+@router.get(
+    "/openloops/install/status",
+    summary="Poll the status of a background install job",
+)
+def openloops_install_status(
+    library: str = Query(..., description="OL library name"),
+):
+    """Returns the latest snapshot for an install job (running, completed,
+    failed, or already-installed).  Returns 404 if no job has ever been
+    started for that library.
+    """
+    from feynman_engine.amplitudes.openloops_install_jobs import get_status
+    snapshot = get_status(library)
+    if snapshot is None:
+        # Maybe it's installed already (the install-process command
+        # bypasses the job manager).  Surface that as a clean status.
+        from feynman_engine.amplitudes.openloops_bridge import installed_processes
+        if library in installed_processes():
+            import time as _t
+            return {
+                "library": library,
+                "state":   "already-installed",
+                "elapsed_s":   0.0,
+                "started_at":  _t.time(),
+                "finished_at": _t.time(),
+                "error":   None,
+                "log_tail": "",
+                "log_chars": 0,
+            }
+        raise HTTPException(
+            status_code=404,
+            detail=f"No install job tracked for library {library!r}.",
+        )
+    return snapshot
+
+
+@router.get(
+    "/openloops/install/jobs",
+    summary="List all background install jobs",
+)
+def openloops_install_jobs():
+    """All currently tracked install jobs (running + finished)."""
+    from feynman_engine.amplitudes.openloops_install_jobs import list_jobs
+    return {"jobs": list_jobs()}

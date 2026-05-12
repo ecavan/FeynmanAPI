@@ -143,14 +143,16 @@ RUN set -ex \
     && chmod +x /opt/openloops/openloops /opt/openloops/scons \
     && mkdir -p /opt/openloops/proclib
 
-# Bundle a curated process pack covering the major LHC analyses:
-#   ppllj — Drell-Yan + jet
-#   pptt  — top pair (NLO QCD)
-#   pph   — gluon-fusion Higgs (loop-induced)
-# Each ~50-100 MB compiled.  Other libraries (pphtt, ppvv, pphjj, pphh)
+# Bundle a curated process pack covering the major LHC analyses + Path-A EW NLO:
+#   ppllj    — Drell-Yan + jet (QCD NLO)
+#   pptt     — top pair (NLO QCD)
+#   pph      — gluon-fusion Higgs (loop-induced)
+#   eell_ew  — e+e-→l+l- with EW NLO (Path-A finite virtual)
+#   eella_ew — e+e-→l+l-+γ with EW NLO (Path-A real-photon emission)
+# Each ~50-100 MB compiled.  Other libraries (pphtt, ppvv, pphjj, pphh, ppllj_ew)
 # are user-installed on demand via `feynman install-process <name>`.
 RUN cd /opt/openloops \
-    && for proc in ppllj pptt pph; do \
+    && for proc in ppllj pptt pph eell_ew eella_ew; do \
         (./openloops libinstall "$proc" \
           && echo "$proc bundled") \
           || echo "WARNING: $proc download failed during build; install via feynman install-process $proc"; \

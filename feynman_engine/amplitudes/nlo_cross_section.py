@@ -346,26 +346,38 @@ def _classify_process(process: str, theory: str) -> dict:
                 ),
             }
 
-    # --- V2.7.A: Universal EW NLO via Sudakov LL+NLL ---
+    # --- V2.7.A + Path-A: EW NLO via OpenLoops finite virtual + universal QED ---
+    # If an EW NLO process library is installed, use the OpenLoops finite
+    # virtual (γ + Z + W + H + t loops with full mass dependence) combined
+    # with universal QED inclusive K.  Otherwise fall back to the analytic
+    # Sudakov LL+NLL hybrid (V2.7.A).
     if theory_up == "EW":
-        from feynman_engine.amplitudes.nlo_ew_general import ew_nlo_sudakov_kfactor
-        sudakov = ew_nlo_sudakov_kfactor(process.strip(), sqrt_s_gev=91.2)
-        # Re-evaluated at requested √s in nlo_cross_section() below
+        # Try the production hybrid (uses OL when library available, else falls
+        # back to Sudakov + universal QED).  k_factor here is a placeholder; the
+        # real evaluation at the user's √s happens in nlo_cross_section() below.
+        from feynman_engine.amplitudes.nlo_ew_finite import (
+            ew_nlo_kfactor_hybrid,
+        )
+        hybrid = ew_nlo_kfactor_hybrid(
+            process.strip(), sqrt_s_gev=91.2,
+            prefer_openloops=False,  # placeholder eval — skip OL call here
+        )
         return {
             "supported": True,
-            "nlo_method": "ew-sudakov-LL-NLL",
-            "k_factor": sudakov.k_factor,        # placeholder; rebuilt at known √s
+            "nlo_method": "ew-nlo-hybrid",
+            "k_factor": hybrid.k_factor,        # placeholder; rebuilt at √s below
             "coupling": coupling,
             "coupling_power": coupling_power,
             "n_out": n_out,
             "incoming": incoming,
             "outgoing": outgoing,
-            "trust_level": sudakov.trust_level,
-            "accuracy_caveat": sudakov.accuracy_caveat,
+            "trust_level": hybrid.trust_level,
+            "accuracy_caveat": hybrid.accuracy_caveat,
             "description": (
-                "EW Sudakov leading + next-to-leading log K-factor; "
-                "K = 1 - (α/(4π sin²θ_W)) Σ T_eff² × {L² + 3L}, "
-                "L = log(s/M_W²)."
+                "EW NLO via OpenLoops finite virtual (when library installed) "
+                "or analytic Sudakov LL+NLL hybrid (fallback).  Captures γ + Z + "
+                "W + H + t one-loop contributions with full mass dependence in "
+                "the G_μ scheme.  Universal IR-pole closure verified at runtime."
             ),
         }
 
@@ -552,6 +564,29 @@ def nlo_cross_section(
         sudakov = ew_nlo_sudakov_kfactor(process.strip(), sqrt_s_gev=sqrt_s)
         k_factor = sudakov.k_factor
 
+    # For EW NLO hybrid (V2.7.A + Path-A), re-evaluate at user √s.  This
+    # uses OpenLoops finite virtual when the EW NLO library is installed,
+    # otherwise falls back to analytic Sudakov + universal QED.
+    if method_label == "ew-nlo-hybrid":
+        from feynman_engine.amplitudes.nlo_ew_finite import ew_nlo_kfactor_hybrid
+        hybrid = ew_nlo_kfactor_hybrid(
+            process.strip(), sqrt_s_gev=sqrt_s, n_psp_samples=20,
+        )
+        k_factor = hybrid.k_factor
+        # Promote richer method label and trust info to caller
+        result_method_extra = {
+            "method": hybrid.method,
+            "ew_nlo_library": hybrid.library_ol,
+            "delta_qed_universal": hybrid.delta_qed_universal,
+            "delta_sudakov": hybrid.delta_sudakov,
+            "delta_v_ol_bare": hybrid.delta_virtual_ol_bare,
+            "ol_pole_2_residue": hybrid.pole_2_residue,
+            "trust_level": hybrid.trust_level,
+            "accuracy_caveat": hybrid.accuracy_caveat,
+        }
+    else:
+        result_method_extra = None
+
     sigma_nlo_pb = sigma_born_pb * k_factor
     delta_nlo_pb = sigma_nlo_pb - sigma_born_pb
     sigma_nlo_err_pb = sigma_born_err_pb * k_factor
@@ -564,8 +599,14 @@ def nlo_cross_section(
         "order": "NLO",
         "method": method_label,
         "nlo_description": info["description"],
-        "sigma_born_pb": sigma_born_pb,
+        # `sigma_pb` mirrors the LO endpoint's primary field so the same client
+        # code works for either order.  `sigma_lo_pb` and `sigma_nlo_pb` give
+        # explicit access to both pieces of the K-factor decomposition;
+        # `sigma_born_pb` is kept as a backwards-compatible alias for sigma_lo.
+        "sigma_pb": sigma_nlo_pb,
+        "sigma_lo_pb": sigma_born_pb,
         "sigma_nlo_pb": sigma_nlo_pb,
+        "sigma_born_pb": sigma_born_pb,
         "delta_nlo_pb": delta_nlo_pb,
         "k_factor": k_factor,
         "sigma_uncertainty_pb": sigma_nlo_err_pb,
@@ -575,6 +616,12 @@ def nlo_cross_section(
         result["trust_level"] = info["trust_level"]
     if info.get("accuracy_caveat"):
         result["accuracy_caveat"] = info["accuracy_caveat"]
+
+    # Merge hybrid-EW-specific diagnostics if applicable
+    if result_method_extra is not None:
+        for k, v in result_method_extra.items():
+            if v is not None:
+                result[k] = v
 
     if n_out > 2:
         result["n_final_state"] = n_out

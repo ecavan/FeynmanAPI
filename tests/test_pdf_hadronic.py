@@ -690,18 +690,21 @@ class TestLHAPDFBackend:
     rather than re-test LHAPDF itself.
     """
 
-    def test_factory_falls_back_when_lhapdf_missing(self):
-        """get_pdf('auto') returns the built-in PDF when LHAPDF is unavailable."""
+    def test_factory_raises_when_lhapdf_missing(self):
+        """get_pdf('auto') raises RuntimeError when LHAPDF + CT18LO unavailable.
+
+        LHAPDF + CT18LO is mandatory as of v0.2.2; the engine refuses to
+        return a silent built-in fallback that would give 1/2 to 1/3 of LHC σ.
+        """
         from feynman_engine.amplitudes.pdf import (
             _lhapdf_available, get_pdf, PDFSet, LHAPDFSet,
         )
-        pdf = get_pdf("auto")
         if _lhapdf_available():
-            # LHAPDF installed → should prefer it (or fall back if CT18LO missing)
+            pdf = get_pdf("auto")
             assert isinstance(pdf, (LHAPDFSet, PDFSet))
         else:
-            assert isinstance(pdf, PDFSet)
-            assert pdf.backend == "builtin"
+            with pytest.raises(RuntimeError, match="LHAPDF"):
+                get_pdf("auto")
 
     def test_factory_explicit_lo_simple(self):
         """get_pdf('LO-simple') always returns the built-in regardless of LHAPDF."""

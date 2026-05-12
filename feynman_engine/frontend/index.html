@@ -74,7 +74,6 @@
             <button class="example-btn" data-process="e+ e- -> gamma gamma" data-theory="QED" data-loops="1">e⁺e⁻ → γγ <span class="ex-tag ex-tag-loop">annihil. VP</span></button>
             <button class="example-btn" data-process="gamma gamma -> e+ e-" data-theory="QED" data-loops="1">γγ → e⁺e⁻ <span class="ex-tag ex-tag-loop">pair prod. VP</span></button>
             <button class="example-btn" data-process="gamma gamma -> gamma gamma" data-theory="QED" data-loops="1">γγ → γγ <span class="ex-tag ex-tag-loop">light-by-light</span></button>
-            <button class="example-btn" data-process="e+ e- -> t t~" data-theory="QED" data-loops="1">e⁺e⁻ → tt̄ <span class="ex-tag ex-tag-loop">QED box</span></button>
           </div>
 
           <!-- Self-energies & vertex form factors are not 2→N scattering
@@ -121,7 +120,6 @@
             <button class="example-btn" data-process="g g -> g g" data-theory="QCD" data-loops="1">gg → gg <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
             <button class="example-btn" data-process="u g -> u g" data-theory="QCD" data-loops="1">ug → ug <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
             <button class="example-btn" data-process="g g -> u u~" data-theory="QCD" data-loops="1">gg → uū <span class="ex-tag ex-tag-loop">virtual corr.</span></button>
-            <button class="example-btn" data-process="q q~ -> g g" data-theory="QCD" data-loops="1">qq̄ → gg full <span class="ex-tag ex-tag-loop">Catani 1996</span></button>
           </div>
 
           <!-- QCD self-energies, vertices, DGLAP kernels and α_s 2-loop are
@@ -218,7 +216,6 @@
             <button class="example-btn" data-process="e+ e- -> Z H" data-theory="EW" data-loops="0">e⁺e⁻ → ZH <span class="ex-tag">Higgsstrahlung</span></button>
             <button class="example-btn" data-process="e+ e- -> Z Z" data-theory="EW" data-loops="0">e⁺e⁻ → ZZ <span class="ex-tag">2→2</span></button>
             <button class="example-btn" data-process="e+ e- -> t t~" data-theory="EW" data-loops="0">e⁺e⁻ → tt̄ <span class="ex-tag">top pair</span></button>
-            <button class="example-btn" data-process="e+ e- -> H H" data-theory="EW" data-loops="0">e⁺e⁻ → HH <span class="ex-tag">double H</span></button>
             <button class="example-btn" data-process="e- nu_e~ -> W- Z" data-theory="EW" data-loops="0">e⁻ν̄ₑ → W⁻Z <span class="ex-tag">WZ prod.</span></button>
             <button class="example-btn" data-process="tau+ tau- -> Z H" data-theory="EW" data-loops="0">τ⁺τ⁻ → ZH <span class="ex-tag">2→2</span></button>
           </div>
@@ -237,14 +234,8 @@
           <div class="example-group" data-theory="EW">
             <div class="example-group-label">Loop-induced Higgs Decays</div>
             <button class="example-btn" data-process="H -> gamma gamma" data-theory="EW" data-loops="1">H → γγ <span class="ex-tag ex-tag-loop">W+t loop</span></button>
-            <button class="example-btn" data-process="H -> g g" data-theory="QCD" data-loops="1">H → gg <span class="ex-tag ex-tag-loop">top loop</span></button>
             <button class="example-btn" data-process="H -> Z gamma" data-theory="EW" data-loops="1">H → Zγ <span class="ex-tag ex-tag-loop">W+t loop</span></button>
             <button class="example-btn" data-process="H -> b b~" data-theory="EW" data-loops="1">H → bb̄ NLO QCD <span class="ex-tag ex-tag-loop">17α_s/3π</span></button>
-          </div>
-
-          <div class="example-group" data-theory="EW">
-            <div class="example-group-label">Loop-induced Production</div>
-            <button class="example-btn" data-process="g g -> H" data-theory="EW" data-loops="1">gg → H full m_t <span class="ex-tag ex-tag-loop">no HEFT</span></button>
           </div>
 
           <!-- EW self-energies and vertex form factors live in the
@@ -263,7 +254,6 @@
             <div class="example-group-label">DM Production</div>
             <button class="example-btn" data-process="e+ e- -> chi chi~" data-theory="BSM" data-loops="0">e⁺e⁻ → χχ̄ <span class="ex-tag">via Z'</span></button>
             <button class="example-btn" data-process="mu+ mu- -> chi chi~" data-theory="BSM" data-loops="0">μ⁺μ⁻ → χχ̄ <span class="ex-tag">via Z'</span></button>
-            <button class="example-btn" data-process="e+ e- -> Zp Zp" data-theory="BSM" data-loops="0">e⁺e⁻ → Z'Z' <span class="ex-tag">pair prod.</span></button>
           </div>
 
           <div class="example-group" data-theory="BSM">
@@ -547,6 +537,10 @@
             </label>
             <label>n_events (MC)
               <input type="number" id="hist-nevents" value="50000" min="1000" max="500000" step="10000" />
+            </label>
+            <label>min pT (GeV)
+              <input type="number" id="hist-minpt" value="0" min="0" max="500" step="5"
+                     title="Per-particle pT cut.  Required for IR-divergent processes (γγ, jj).  Defaults to 25 GeV for pp→γγ and 30 GeV for pp→jj if left at 0."/>
             </label>
             <button id="hist-compute-btn" class="btn-primary">Compute distribution</button>
           </div>

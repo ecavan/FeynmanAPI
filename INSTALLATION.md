@@ -1,12 +1,13 @@
 # Installation Guide
 
-Three install paths. Pick what fits.
+Two install paths. Pick what fits.
 
 | Path | Time | Get | When |
 |---|---|---|---|
 | **Docker** | 1 min | Everything bundled, no build | Easiest. Trying it out, demos. |
-| **Full pip** | 10-20 min | All native HEP tools built locally | Most users. |
-| **Lightweight pip** | 3 min | QGRAF, FORM, LoopTools only | Teaching, CI, fast install. |
+| **pip** | 10-20 min | All native HEP tools built locally | Most users. |
+
+LHAPDF + CT18LO is a hard prerequisite for hadronic cross-sections and is installed automatically by `feynman setup`. There is no longer a "lightweight" path that skips it — the hadronic σ numbers in the README assume LHAPDF + CT18LO and we don't ship a degraded fallback.
 
 ## Docker
 
@@ -17,7 +18,7 @@ docker run -p 8000:8000 ecavan/feynman-api:latest
 
 The image bundles QGRAF, FORM, LoopTools, LHAPDF (with CT18LO), OpenLoops 2 (with the `ppllj` process library), and the LaTeX/SVG rendering stack. No system prerequisites beyond Docker. Recommended on Windows.
 
-## Full pip install
+## pip install
 
 ### 1. System prerequisites
 
@@ -59,27 +60,22 @@ What `feynman setup` does:
 
 If a step fails, `feynman doctor` prints the exact retry command.
 
-## Lightweight pip install
+## Skipping OpenLoops
 
-Skip the slowest dependencies for a 3-minute install:
+If you don't need generic NLO QCD virtuals for arbitrary processes (the engine has tabulated K-factors for major LHC channels built-in), you can shave ~5-10 min off the build:
 
 ```bash
-pip install feynman-engine
-feynman setup --skip-lhapdf --skip-openloops
+feynman setup --skip-openloops
 ```
 
-You get: all diagram generation, all tree-level amplitudes for all 5 theories, LO cross-sections, loop amplitudes via LoopTools, tabulated NLO K-factors for major LHC channels, universal QED + EW Sudakov NLO, the browser UI.
-
-You miss: LHAPDF (hadronic σ falls back to a built-in LO PDF, factor-of-2-3 accuracy) and OpenLoops (NLO σ for unregistered QCD processes returns HTTP 422 with a workaround).
-
-Add them later:
+OpenLoops can be added later:
 
 ```bash
-feynman install-lhapdf
-feynman install-pdf-set CT18LO
 feynman install-openloops
 feynman install-process ppllj
 ```
+
+LHAPDF is not optional — `feynman setup` always builds it and installs CT18LO.
 
 ## Verifying the install
 

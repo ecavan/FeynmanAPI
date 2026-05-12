@@ -345,6 +345,7 @@ def _convolve_channel(
     sqrt_s: float,
     threshold_sqrt_s: float,
     nlo_running: Optional[Callable[[float], float]] = None,
+    alpha_s_power: int = 0,
 ) -> float:
     """Convolve one ordered partonic channel against the PDF luminosity.
 
@@ -367,6 +368,12 @@ def _convolve_channel(
     nlo_running : callable or None
         Optional ``ŝ → k_factor`` to apply a running-coupling NLO correction
         to σ̂ at each phase-space point.
+    alpha_s_power : int
+        Power of α_s in σ̂.  When > 0, σ̂ is rescaled by
+        (α_s_pdf/0.118)^N so that the partonic coupling matches the
+        PDF's α_s convention.  CT18LO uses α_s(M_Z) = 0.135, so for
+        gg→tt̄ (α_s² in σ̂) the rescale is (0.135/0.118)² ≈ 1.31.
+        Set to 0 for purely EW/QED processes (Drell-Yan, ZH, …).
     """
     s_pp = sqrt_s ** 2
     if threshold_sqrt_s ** 2 >= s_pp:
@@ -376,12 +383,19 @@ def _convolve_channel(
     if tau_min >= tau_max:
         return 0.0
 
+    # α_s consistency factor: σ̂ was computed at engine ALPHA_S=0.118; if the
+    # PDF was fit with a different α_s, scale σ̂ accordingly.
+    pdf_alpha_s_mz = getattr(pdf, "alpha_s_mz", 0.118)
+    alpha_s_scale = (pdf_alpha_s_mz / 0.118) ** alpha_s_power if alpha_s_power else 1.0
+
     def integrand(tau: float) -> float:
         s_hat = tau * s_pp
         sqrt_s_hat = math.sqrt(s_hat)
         sigma_hat_pb = sigma_hat_grid(sqrt_s_hat)
         if sigma_hat_pb <= 0:
             return 0.0
+        if alpha_s_scale != 1.0:
+            sigma_hat_pb *= alpha_s_scale
         if nlo_running is not None:
             sigma_hat_pb *= nlo_running(s_hat)
         L = parton_luminosity(pdf, pdg_a, pdg_b, tau, mu_f_sq)
@@ -518,6 +532,7 @@ def _top_pair_hadronic(
     if sigma_gg is not None:
         sig_gg = _convolve_channel(
             sigma_gg, pdf, 21, 21, mu_f_sq, sqrt_s, sqrt_s_min, nlo_run,
+            alpha_s_power=2,    # σ̂(gg→tt̄) ~ α_s²
         )
         channel_results.append({"partonic": "g g -> t t~", "sigma_pb": sig_gg})
 
@@ -527,9 +542,11 @@ def _top_pair_hadronic(
             # Sum both orderings — q from p1 / q̄ from p2  and the reverse.
             sig_qq_total += _convolve_channel(
                 sigma_qq, pdf, q_flav, -q_flav, mu_f_sq, sqrt_s, sqrt_s_min, nlo_run,
+                alpha_s_power=2,    # σ̂(qq̄→tt̄) ~ α_s²
             )
             sig_qq_total += _convolve_channel(
                 sigma_qq, pdf, -q_flav, q_flav, mu_f_sq, sqrt_s, sqrt_s_min, nlo_run,
+                alpha_s_power=2,
             )
         channel_results.append({
             "partonic": "q q~ -> t t~ (all flavors, both orderings)",
@@ -743,11 +760,23 @@ def _generic_hadronic(
             )
             nlo_run = _nlo_run_for(coupling_kind)
 
+            # α_s power in the partonic σ̂ — used to rescale to the PDF's
+            # α_s convention.  For QCD 2→2: σ̂ ~ α_s² (g g, qq̄→gg, etc.).
+            # For mixed QCDQED with γ in final state: σ̂ ~ α_s × α (set to 1).
+            # For pure-EW: σ̂ ~ α², no α_s (set to 0).
+            if theory_used_for_channel == "QCD":
+                alpha_s_pow = 2
+            elif theory_used_for_channel == "QCDQED":
+                alpha_s_pow = 1
+            else:
+                alpha_s_pow = 0
+
             sig_pb = _convolve_channel(
                 grid, pdf,
                 _PARTON_PDG[a], _PARTON_PDG[b],
                 mu_f_sq, sqrt_s, sqrt_s_min,
                 nlo_running=nlo_run,
+                alpha_s_power=alpha_s_pow,
             )
             if sig_pb <= 0:
                 continue
@@ -1166,6 +1195,28 @@ def hadronic_cross_section(
             "error": f"Empty final state in '{process}'.",
             "supported": False,
         }
+
+    # Default min_pT for IR-divergent processes — without a cut, σ is
+    # formally infinite (collinear or soft singularities).  Applied only
+    # when the user didn't specify a cut explicitly (min_pT=0.0 default).
+    final_set = set(final_state.split())
+    pT_default_applied = False
+    if min_pT == 0.0:
+        if final_set == {"gamma"} or final_state.split() == ["gamma", "gamma"]:
+            # pp → γγ: photon E_T cut required.  ATLAS/CMS use E_T > 25-40 GeV.
+            min_pT = 25.0
+            pT_default_applied = True
+        elif final_set <= {"g", "u", "d", "s", "c", "b", "u~", "d~", "s~", "c~", "b~"} \
+             and len(final_state.split()) == 2 \
+             and "t" not in final_set and "t~" not in final_set:
+            # pp → jj (dijet): jet pT cut required.  ATLAS/CMS use pT > 25-50 GeV.
+            min_pT = 30.0
+            pT_default_applied = True
+        elif "gamma" in final_set and any(p in {"g","u","d","s","c","b","u~","d~","s~","c~","b~"}
+                                            for p in final_state.split()):
+            # pp → γ+jet (prompt photon): photon and jet cuts.
+            min_pT = 25.0
+            pT_default_applied = True
 
     # Resolve PDF set (with auto-fallback).
     try:

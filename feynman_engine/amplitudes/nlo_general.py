@@ -266,10 +266,13 @@ def real_minus_dipoles_2to2_plus_g(
         return per_event
 
     if use_vegas:
-        # Proper Vegas using Lepage's `vegas` package: bijective unit-cube
-        # → 3-body phase space mapping via RAMBO-like construction.
-        # Each unit-cube point uniquely produces one PSP, so Vegas can
-        # adapt its importance grid based on observed integrand values.
+        # Bijective unit-cube → 3-body massless PSP via the new
+        # `rambo_massless_from_unit_cube` helper.  Each x ∈ [0,1]^12
+        # maps deterministically to a single PSP, so Vegas can build a
+        # genuine importance density over the variance structure of
+        # the integrand.  12-D = 4 ρ-coordinates per particle × 3
+        # final particles (energy-momentum conservation absorbed into
+        # RAMBO's boost+rescale step).
         try:
             import vegas as vegas_pkg
         except ImportError:
@@ -278,32 +281,24 @@ def real_minus_dipoles_2to2_plus_g(
                 "pip install vegas, or set use_vegas=False to use flat MC."
             )
 
-        n_dim = 5     # 3 final particles × 3 spatial DoF − 4 conservation = 5
+        from feynman_engine.amplitudes.phase_space import (
+            rambo_massless_from_unit_cube,
+        )
+        n_dim = 12     # 4 ρ-coords × 3 final particles
 
-        # Bijective map: x_unit ∈ [0,1]^5 → 3-body massless PSP at √s.
-        # Use the standard RAMBO inversion (uniform y_i = 1 − exp(−q⁰_i/scale))
-        # to convert unit cube samples to massless 4-vectors.  For simplicity
-        # we just feed a deterministic seed-based RAMBO call using the unit
-        # cube to control the seed — true bijection is the next step.
         @vegas_pkg.batchintegrand
         def integrand(x):
-            n = x.shape[0]
-            # Use the unit-cube samples to seed RAMBO deterministically:
-            # convert to integer seeds.
-            seeds = (x[:, 0] * 1e9).astype(int)
-            fm = np.empty((n, 3, 4), dtype=np.float64)
-            wts = np.empty(n, dtype=np.float64)
-            for k in range(n):
-                np.random.seed(int(seeds[k]) % 2**31)
-                fm_k, w_k = rambo_massless(n_final=3, sqrt_s=sqrt_s_gev, n_events=1)
-                fm[k] = fm_k[0]
-                wts[k] = w_k[0]
+            # x has shape (n_batch, 12) per Vegas convention
+            fm, wts = rambo_massless_from_unit_cube(
+                n_final=3, sqrt_s=sqrt_s_gev, x=x,
+            )
             return _integrand_at(fm, wts)
 
         integ = vegas_pkg.Integrator([[0, 1]] * n_dim)
-        # Train + integrate
+        # Training pass — adapts the importance grid to integrand shape.
         per_iter = max(n_events // (n_vegas_iter * 2), 100)
         integ(integrand, nitn=n_vegas_iter, neval=per_iter)
+        # Production pass — fixed grid, accumulates result.
         result = integ(integrand, nitn=n_vegas_iter, neval=per_iter)
         mean = float(result.mean)
         err = float(result.sdev)

@@ -96,7 +96,18 @@ def test_frontend_examples_generate_and_report_availability(
         f"Example '{process}' [{theory}, loops={loops}] has neither diagrams nor |M|²"
     )
 
-    assert payload["has_msq"] == payload["supported"]
+    # Pre-V2.8.A `has_msq` and `supported` were synonymous.  After the
+    # OpenLoops Tier-4 fallback was added, an installed OL library can
+    # mark a process as `supported=True` even though no symbolic |M|² is
+    # available (`has_msq=False`).  In that case the cross-section /
+    # decay-width endpoints route through OL Born + RAMBO numerically.
+    if payload["supported"] and not payload["has_msq"]:
+        assert payload.get("backend") == "openloops", (
+            f"supported=True with has_msq=False expected only for OL backend, "
+            f"got backend={payload.get('backend')!r}"
+        )
+    else:
+        assert payload["has_msq"] == payload["supported"]
     assert payload["has_integral"] == bool(payload.get("integral_latex"))
     if payload["has_msq"]:
         assert payload["msq_sympy"]

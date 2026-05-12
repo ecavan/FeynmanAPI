@@ -147,6 +147,82 @@ def rambo_massless(n_final: int, sqrt_s: float, n_events: int,
     return p, weights
 
 
+def rambo_massless_from_unit_cube(
+    n_final: int, sqrt_s: float, x: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Bijective unit-cube → massless N-body phase space.
+
+    Takes a batch of unit-cube samples ``x`` of shape ``(n_events, 4*n_final)``
+    and returns ``(momenta, weights)`` with the same per-event PSP as
+    ``rambo_massless`` but driven entirely by ``x`` rather than internal
+    RNG.  This bijection is what allows Vegas (or any importance-sampler)
+    to actually *adapt* — the same unit-cube point always maps to the
+    same PSP, so Vegas can build a grid of integrand values in unit-cube
+    coordinates.
+
+    The 4·n_final unit-cube coordinates per event are interpreted as
+    ``(ρ₁, ρ₂, ρ₃, ρ₄)`` per particle in the original RAMBO algorithm
+    (Kleiss-Stirling-Ellis NPB 247 (1984)): ρ₁,ρ₄ drive the exponential
+    energy ``E_q = −ln(ρ₁ρ₄)``; ρ₂ → cosθ_q via ``2ρ₂−1``; ρ₃ → φ_q via
+    ``2π ρ₃``.  After boosting to the Q-rest frame and rescaling to √s
+    we obtain the physical PSP.
+    """
+    n = n_final
+    n_events = x.shape[0]
+    s = sqrt_s ** 2
+    if x.shape[1] != 4 * n:
+        raise ValueError(
+            f"unit-cube input must have {4*n} columns for n_final={n} "
+            f"(got {x.shape[1]})"
+        )
+
+    # Reshape: (n_events, 4n) → (n_events, n, 4) with last dim = (ρ₁,ρ₂,ρ₃,ρ₄)
+    rho = x.reshape(n_events, n, 4)
+    rho1 = rho[:, :, 0]
+    rho2 = rho[:, :, 1]
+    rho3 = rho[:, :, 2]
+    rho4 = rho[:, :, 3]
+
+    cos_theta = 2 * rho2 - 1
+    sin_theta = np.sqrt(np.clip(1 - cos_theta ** 2, 0.0, 1.0))
+    phi = 2 * np.pi * rho3
+    E_q = -np.log(rho1 * rho4 + 1e-300)
+
+    q = np.zeros((n_events, n, 4))
+    q[:, :, 0] = E_q
+    q[:, :, 1] = E_q * sin_theta * np.cos(phi)
+    q[:, :, 2] = E_q * sin_theta * np.sin(phi)
+    q[:, :, 3] = E_q * cos_theta
+
+    Q = np.sum(q, axis=1)
+    Q_mass = np.sqrt(np.maximum(Q[:, 0] ** 2 - Q[:, 1] ** 2 - Q[:, 2] ** 2 - Q[:, 3] ** 2, 1e-30))
+    b = -Q[:, 1:4] / Q[:, 0:1]
+    b_sq = np.sum(b ** 2, axis=1)
+    gamma = Q[:, 0] / Q_mass
+
+    p = np.zeros_like(q)
+    for i in range(n):
+        q_i = q[:, i, :]
+        b_dot_q = np.sum(b * q_i[:, 1:4], axis=1)
+        factor = np.where(b_sq > 1e-30,
+                          (gamma - 1) * b_dot_q / b_sq + gamma * q_i[:, 0],
+                          q_i[:, 0])
+        p[:, i, 0] = gamma * (q_i[:, 0] + b_dot_q)
+        p[:, i, 1] = q_i[:, 1] + b[:, 0] * factor
+        p[:, i, 2] = q_i[:, 2] + b[:, 1] * factor
+        p[:, i, 3] = q_i[:, 3] + b[:, 2] * factor
+
+    x_scale = sqrt_s / Q_mass
+    p *= x_scale[:, np.newaxis, np.newaxis]
+
+    log_phase_vol = ((n - 1) * math.log(math.pi / 2)
+                     + (n - 2) * math.log(s)
+                     - (3 * n - 4) * math.log(2 * math.pi)
+                     - math.lgamma(n) - math.lgamma(n - 1))
+    weights = np.full(n_events, math.exp(log_phase_vol))
+    return p, weights
+
+
 def rambo_massive(
     n_final: int,
     sqrt_s: float,

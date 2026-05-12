@@ -143,9 +143,21 @@ def qed_nlo_kfactor(process: str, theory: str = "QED") -> QEDNLOResult:
             trust_level="blocked",
             accuracy_caveat="Process must contain '->': cannot parse",
         )
-    lhs, rhs = process.split("->")
-    incoming = [p for p in lhs.split() if p]
-    outgoing = [p for p in rhs.split() if p]
+    parts = process.split("->", maxsplit=1)
+    if len(parts) != 2:
+        return QEDNLOResult(
+            process=process, theory=theory, sqrt_s_gev=None,
+            incoming=[], outgoing=[],
+            charges={}, n_charged_legs=0,
+            sigma_lo_pb=None, sigma_nlo_pb=None, k_factor=1.0,
+            delta_qed_relative=0.0,
+            method="error",
+            trust_level="blocked",
+            accuracy_caveat=f"Malformed process string (multiple '->'?): {process!r}",
+        )
+    lhs, rhs = parts
+    incoming = [p for p in lhs.split() if p and p != "->"]
+    outgoing = [p for p in rhs.split() if p and p != "->"]
 
     # Build per-leg charge list (NOT dict — Bhabha e+e- → e+e- has 4 charged
     # legs even though only 2 unique particle types appear).  The reported

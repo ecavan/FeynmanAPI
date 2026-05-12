@@ -226,9 +226,12 @@ def to_pdg_string(process: str) -> str:
     """
     if "->" not in process:
         raise ValueError(f"Process must contain '->': {process!r}")
-    lhs, rhs = process.split("->")
-    in_parts = [p for p in lhs.split() if p]
-    out_parts = [p for p in rhs.split() if p]
+    parts = process.split("->", maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError(f"Malformed process string: {process!r}")
+    lhs, rhs = parts
+    in_parts = [p for p in lhs.split() if p and p != "->"]
+    out_parts = [p for p in rhs.split() if p and p != "->"]
 
     def _lookup(name: str) -> int:
         if name in _PDG:
@@ -251,11 +254,23 @@ _register_lock = threading.Lock()
 
 @lru_cache(maxsize=128)
 def _cached_register(pdg_string: str, amptype: str):
-    """Register an OpenLoops Process, cached on (PDG-string, amptype)."""
+    """Register an OpenLoops Process, cached on (PDG-string, amptype).
+
+    Resets all coupling-order parameters to defaults before registration
+    to avoid sticky global state from prior calls (especially EW NLO
+    registrations that set loop_order_ew to non-default values).
+    """
     ol = _load_openloops()
     if ol is None:
         raise RuntimeError("OpenLoops bindings unavailable")
     with _register_lock, _CwdInPrefix():
+        # Reset coupling orders to defaults so this "default" register
+        # doesn't inherit settings from a prior register_process_with_orders
+        # call that touched the same global parameters.
+        ol.set_parameter("order_qcd", -1)
+        ol.set_parameter("order_ew", -1)
+        ol.set_parameter("loop_order_qcd", -1)
+        ol.set_parameter("loop_order_ew", -1)
         return ol.Process(pdg_string, amptype)
 
 
@@ -270,12 +285,138 @@ def register_process(process: str, amptype: str = "loop"):
     return _cached_register(pdg, amptype)
 
 
+class OpenLoopsRegistrationError(RuntimeError):
+    """Raised when OpenLoops can't register a process with the requested orders.
+
+    Most common cause: the process library installed with ``feynman install-process``
+    was compiled with different coupling orders (e.g. QCD NLO only, no EW NLO).
+    Install a library with EW NLO support — for ``e+ e- -> ll`` use ``eell_ew``;
+    for ``pp -> ll + jet`` use ``ppllj_ew``; etc.  See
+    https://openloops.hepforge.org/process_library.php for the full list.
+    """
+
+
+# ─── Coupling-order-aware registration (EW NLO support) ──────────────────────
+#
+# OpenLoops 2 supports independent QCD and EW perturbative orders.  For any
+# physical process there are TWO order specifications that need to match the
+# compiled library:
+#
+#   order_qcd / order_ew    — coupling order at *amplitude* level (= number
+#                             of QCD/EW vertices in the tree diagram).
+#   loop_order_qcd / loop_order_ew — coupling order of the LOOP amplitude
+#                             (= tree order + extra QCD/EW vertices added
+#                             by the 1-loop correction).
+#
+# The amplitude-squared NLO interference 2 Re(M*_tree · M_loop) therefore has
+# total coupling order = order_X + loop_order_X = 2 × tree_X + 1 (for one
+# extra X coupling at the loop level).
+#
+# Examples for e+ e- → μ+ μ-:
+#   QED tree:                      order_ew=2, loop_order_ew=2 (no loop)
+#   QED-only NLO (γ-only loop):    order_ew=2, loop_order_ew=3, library=*_ew
+#   EW NLO (γ + Z + W loops):      order_ew=2, loop_order_ew=3, library=eell_ew
+#                                   — same call, but the library has EW=2,1
+#                                   compiled in (vs QED-only EW=2,1 with
+#                                   QED=1 sub-flag in the .info)
+#
+# Examples for u u~ → e+ e- (DY):
+#   QCD NLO:    order_qcd=0, order_ew=2, loop_order_qcd=1, loop_order_ew=2
+#   EW NLO:     order_qcd=0, order_ew=2, loop_order_qcd=0, loop_order_ew=3
+
+
+@lru_cache(maxsize=256)
+def _cached_register_with_orders(
+    pdg_string: str,
+    amptype: str,
+    order_qcd: int,
+    order_ew: int,
+    loop_order_qcd: int,
+    loop_order_ew: int,
+):
+    """Register an OpenLoops Process with explicit coupling orders.
+
+    Cached on (pdg, amptype, order_qcd, order_ew, loop_order_qcd, loop_order_ew).
+    Use sentinel value -1 for any order parameter to leave it at the OL default
+    (which means "any order accepted by the library").
+
+    IMPORTANT: OL's coupling-order parameters are GLOBAL state (sticky across
+    Process registrations).  We always set ALL four orders before each register
+    call to avoid leaking state from a previous registration into the next.
+    """
+    ol = _load_openloops()
+    if ol is None:
+        raise RuntimeError("OpenLoops bindings unavailable")
+    with _register_lock, _CwdInPrefix():
+        # Always set ALL four orders to either the requested value or -1 (default)
+        # to avoid sticky global state from prior Process registrations.
+        ol.set_parameter("order_qcd", int(order_qcd))
+        ol.set_parameter("order_ew", int(order_ew))
+        ol.set_parameter("loop_order_qcd", int(loop_order_qcd))
+        ol.set_parameter("loop_order_ew", int(loop_order_ew))
+        return ol.Process(pdg_string, amptype)
+
+
+def register_process_with_orders(
+    process: str,
+    amptype: str = "loop",
+    order_qcd: int = -1,
+    order_ew: int = -1,
+    loop_order_qcd: int = -1,
+    loop_order_ew: int = -1,
+):
+    """Register an OpenLoops process with explicit QCD/EW coupling orders.
+
+    Parameters
+    ----------
+    process : str
+        FeynmanEngine process string, e.g. ``"e+ e- -> mu+ mu-"``.
+    amptype : {"tree", "loop", "loop2"}
+        OpenLoops amplitude type.
+    order_qcd, order_ew : int
+        Coupling order at the *amplitude* level (number of QCD/EW vertices
+        in the tree diagram).  -1 = library default.
+    loop_order_qcd, loop_order_ew : int
+        Coupling order of the loop amplitude.  For an EW NLO correction to a
+        process whose tree is purely EW, set ``loop_order_ew = order_ew + 1``
+        and ``loop_order_qcd = 0``.
+
+    Raises
+    ------
+    RuntimeError if OpenLoops is unavailable.
+    OpenLoopsRegistrationError if the requested orders aren't compiled in
+        the installed process library.
+    """
+    if not is_available():
+        raise RuntimeError(
+            "OpenLoops Python bindings are not importable.  "
+            "Run `feynman install-openloops` and `feynman install-process <name>`."
+        )
+    pdg = to_pdg_string(process)
+    try:
+        return _cached_register_with_orders(
+            pdg, amptype,
+            int(order_qcd), int(order_ew),
+            int(loop_order_qcd), int(loop_order_ew),
+        )
+    except Exception as exc:
+        raise OpenLoopsRegistrationError(
+            f"Failed to register {process!r} (pdg={pdg!r}) with amptype={amptype}, "
+            f"orders qcd={order_qcd},ew={order_ew} loop_qcd={loop_order_qcd},"
+            f"loop_ew={loop_order_ew}.  Likely the relevant process library "
+            f"is not installed or wasn't compiled with these orders.  "
+            f"Underlying error: {exc}"
+        ) from exc
+
+
 def get_openloops_parameter(name: str, kind: str = "double") -> float:
     """Query a runtime OpenLoops parameter (α_s, α_qed, μ_R, …).
 
-    OpenLoops doesn't expose its α_s as an Python attribute — you have to
-    register a process first to trigger initialisation, then query the
-    underlying Fortran parameter table.  This helper does both.
+    OpenLoops doesn't expose its α_s as an Python attribute — you have
+    to register a process first to trigger initialisation, then query
+    the underlying Fortran parameter table.  This helper does the latter
+    only — relies on the caller to have registered ANY process first
+    (which is true for almost all code paths that need the parameter).
 
     Parameters
     ----------
@@ -293,12 +434,12 @@ def get_openloops_parameter(name: str, kind: str = "double") -> float:
     ol = _load_openloops()
     if ol is None:
         raise RuntimeError("OpenLoops not available; cannot query parameter")
-    # Trigger init by registering a small process if not already done
+    # The OL Fortran layer needs ONE registered process before parameters
+    # are queryable.  We assume the caller has already registered something
+    # (which is true in all our code paths — virtual K-factor calls register
+    # the EW NLO process before calling this).  If nothing has been registered
+    # yet, query may return a default; that's acceptable for our use cases.
     with _register_lock, _CwdInPrefix():
-        try:
-            ol.Process("1 -1 -> 11 -11", "loop")
-        except Exception:
-            pass  # already registered or library missing — we still query
         if kind == "double":
             return float(ol.get_parameter_double(name))
         if kind == "int":
@@ -379,7 +520,9 @@ def get_openloops_alpha_s() -> float:
 
 
 def evaluate_loop_squared(process: str, sqrt_s_gev: float) -> dict:
-    """Evaluate |M|² and the loop interference at √s.
+    """Evaluate |M|² and the loop interference at a random phase-space point.
+
+    For QCD NLO of standard processes (uses default OL orders).
 
     Returns
     -------
@@ -401,3 +544,252 @@ def evaluate_loop_squared(process: str, sqrt_s_gev: float) -> dict:
         "loop_ir1": float(me.loop.ir1),
         "loop_ir2": float(me.loop.ir2),
     }
+
+
+def evaluate_loop_with_orders(
+    process: str,
+    sqrt_s_gev: float,
+    order_qcd: int = -1,
+    order_ew: int = -1,
+    loop_order_qcd: int = -1,
+    loop_order_ew: int = -1,
+    n_psp_samples: int = 1,
+    seed: int = 42,
+) -> dict:
+    """Evaluate the loop amplitude with explicit coupling orders.
+
+    For EW NLO of e.g. ``e+ e- -> mu+ mu-``: pass ``order_ew=2,
+    loop_order_ew=3, order_qcd=0, loop_order_qcd=0`` against a library
+    compiled with EW=2,1 (e.g. ``eell_ew``).
+
+    Parameters
+    ----------
+    process : str
+        Engine process string.
+    sqrt_s_gev : float
+        Centre-of-mass energy in GeV.
+    order_qcd, order_ew : int
+        Tree-level coupling orders (-1 = library default).
+    loop_order_qcd, loop_order_ew : int
+        Loop-level coupling orders (-1 = library default).
+    n_psp_samples : int
+        Number of random RAMBO phase-space points to average over.  For an
+        IR-safe quantity like K_virt = loop_finite/tree at fixed √s, the
+        ratio is constant in s, t, u for a 2→2 s-channel process, so a
+        single sample suffices.  Use n_psp_samples > 1 for processes
+        where the K-factor varies non-trivially across phase space (e.g.
+        2→3 with multiple invariants).
+    seed : int
+        RNG seed for Python-side RAMBO PSP generation, ensuring
+        reproducible averages.  Without an explicit seed OpenLoops's
+        internal RAMBO state is non-reproducible across calls.
+
+    Returns
+    -------
+    dict
+        ``tree``, ``loop_finite``, ``loop_ir1``, ``loop_ir2`` —
+        averaged over the requested PSP samples.  Plus
+        ``tree_psp_std``, ``loop_finite_psp_std`` — std-dev across samples
+        as a phase-space-variation diagnostic.
+    """
+    import numpy as np
+    from feynman_engine.amplitudes.phase_space import rambo_massless
+
+    proc = register_process_with_orders(
+        process, "loop",
+        order_qcd=order_qcd,
+        order_ew=order_ew,
+        loop_order_qcd=loop_order_qcd,
+        loop_order_ew=loop_order_ew,
+    )
+
+    # Determine number of final-state particles for Python RAMBO.
+    # OL's proc.n is the total external particle count.
+    n_final = int(proc.n) - 2  # 2 incoming
+    if n_final < 1:
+        # Fall back to OL's internal RAMBO if we can't reason about kinematics
+        n_final = None
+
+    trees, loops, ir1s, ir2s = [], [], [], []
+    with _register_lock, _CwdInPrefix():
+        if n_final is None or n_psp_samples == 1:
+            # Use OL's internal RAMBO (non-reproducible but simpler)
+            for _ in range(max(1, n_psp_samples)):
+                me = proc.evaluate(float(sqrt_s_gev))
+                trees.append(float(me.tree))
+                loops.append(float(me.loop.finite))
+                ir1s.append(float(me.loop.ir1))
+                ir2s.append(float(me.loop.ir2))
+        else:
+            # Reproducible: Python RAMBO + pp-array evaluate
+            rng = np.random.default_rng(seed)
+            momenta, _ = rambo_massless(n_final, sqrt_s_gev, n_psp_samples, rng)
+            E = sqrt_s_gev / 2.0
+            p1 = np.array([E, 0.0, 0.0,  E])
+            p2 = np.array([E, 0.0, 0.0, -E])
+            for ev in range(n_psp_samples):
+                pp = np.zeros(5 * (2 + n_final), dtype=np.float64)
+                pp[0:4] = p1; pp[4] = 0.0
+                pp[5:9] = p2; pp[9] = 0.0
+                for k in range(n_final):
+                    pp[5 * (2 + k): 5 * (2 + k) + 4] = momenta[ev, k, :]
+                    pp[5 * (2 + k) + 4] = 0.0
+                try:
+                    me = proc.evaluate(pp)
+                except Exception:
+                    # Fall back to OL's internal RAMBO if pp eval fails
+                    me = proc.evaluate(float(sqrt_s_gev))
+                trees.append(float(me.tree))
+                loops.append(float(me.loop.finite))
+                ir1s.append(float(me.loop.ir1))
+                ir2s.append(float(me.loop.ir2))
+
+    trees = np.asarray(trees)
+    loops = np.asarray(loops)
+    ir1s = np.asarray(ir1s)
+    ir2s = np.asarray(ir2s)
+    return {
+        "tree": float(trees.mean()),
+        "tree_psp_std": float(trees.std()) if len(trees) > 1 else 0.0,
+        "loop_finite": float(loops.mean()),
+        "loop_finite_psp_std": float(loops.std()) if len(loops) > 1 else 0.0,
+        "loop_ir1": float(ir1s.mean()),
+        "loop_ir2": float(ir2s.mean()),
+        "n_psp_samples": int(n_psp_samples),
+    }
+
+
+# ─── EW NLO library availability check ──────────────────────────────────────
+
+# Map each FeynmanEngine process pattern to the OpenLoops library that
+# provides its EW NLO loop.  Used by ``ensure_ew_nlo_library_for`` to give
+# users a clear error message + the install command.
+_EW_NLO_LIBRARY_MAP: dict[str, str] = {
+    # e+ e- → l+ l- (massless leptons)
+    "ee_to_ll": "eell_ew",
+    # e+ e- → t t̄
+    "ee_to_tt": "eett_ew",
+    # e+ e- → V V (W+W-, ZZ)
+    "ee_to_vv": "eevv_ew",
+    # pp → l+ l- (Drell-Yan)
+    "pp_to_ll": "pp2l2nj_ew",  # broader: includes neutrals + jets
+    "pp_to_llj": "ppllj_ew",
+    # pp → V (single-boson)
+    "pp_to_v": "ppvj_ew",
+    "pp_to_vj": "ppvj_ew",
+    "pp_to_vv": "ppvv_ew",
+    "pp_to_vvj": "ppvvj_ew",
+    # pp → t t̄
+    "pp_to_tt": "pptt_ew",
+    "pp_to_ttj": "ppttj_ew",
+    # pp → t W
+    "pp_to_tw": "pptw_ew",
+    # pp → H + V
+    "pp_to_hv": "pphv_ew",
+    "pp_to_hll": "pphll_ew",
+    # pp → H + tt
+    "pp_to_htt": "pphtt_ew",
+    "pp_to_httj": "pphttj_ew",
+    # pp → 4l
+    "pp_to_4l": "pp4lj_ew",
+}
+
+
+def ew_nlo_library_for(process: str) -> Optional[str]:
+    """Return the OpenLoops EW NLO library name for a given process, if known.
+
+    Performs a coarse pattern match on the in/out particle content.  Returns
+    None if no known library matches — the caller can either fall back to
+    the analytic Sudakov path or surface a "library not available" error.
+    """
+    if "->" not in process:
+        return None
+    parts = process.split("->", maxsplit=1)
+    if len(parts) != 2:
+        return None
+    lhs, rhs = parts
+    in_parts = [p for p in lhs.split() if p and p != "->"]
+    out_parts = [p for p in rhs.split() if p and p != "->"]
+
+    in_set = set(p.replace("~", "").rstrip("+-") for p in in_parts)
+    out_set = set(p.replace("~", "").rstrip("+-") for p in out_parts)
+
+    leptons = {"e", "mu", "tau"}
+    quarks = {"u", "d", "s", "c", "b"}
+    bosons = {"W", "Z", "gamma", "ph", "a"}
+
+    def is_lepton_pair(seq: list[str]) -> bool:
+        if len(seq) != 2:
+            return False
+        a, b = seq
+        return (a == "e+" and b == "e-") or (a == "e-" and b == "e+") or \
+               (a == "mu+" and b == "mu-") or (a == "mu-" and b == "mu+") or \
+               (a == "tau+" and b == "tau-") or (a == "tau-" and b == "tau+") or \
+               (a in {"e+", "mu+", "tau+"} and b in {"e-", "mu-", "tau-"}) or \
+               (a in {"e-", "mu-", "tau-"} and b in {"e+", "mu+", "tau+"})
+
+    is_pp = "p" in in_set or in_set <= quarks | {"g"}
+    is_ee = is_lepton_pair(in_parts)
+    out_top = "t" in out_set
+    out_lepton_pair = is_lepton_pair(out_parts)
+    out_vv = sum(1 for p in out_parts if p in {"W+", "W-", "Z"}) == 2
+    out_h = "H" in out_parts or "h" in out_parts
+    out_jets = sum(1 for p in out_parts if p == "g") + \
+               sum(1 for p in out_parts if p.replace("~", "") in quarks)
+
+    out_v_count = sum(1 for p in out_parts if p in {"W+", "W-", "Z"})
+
+    # e+ e- collisions
+    if is_ee:
+        if out_top and out_h:
+            return "eehtt_ew" if "eehtt_ew" in installed_processes() else "eehtt"
+        if out_top:
+            return "eett_ew"
+        if out_h and out_v_count >= 1:
+            # ee → V H (e.g. ee → Z H, ee → W+ W- H eventually) — wired
+            # 2026-05-11 to fix missing ZH NLO EW routing.
+            return "eehv_ew"
+        if out_h and out_lepton_pair:
+            # ee → ℓ⁺ℓ⁻ H (resolved H decay via Z → ll̄)
+            return "eehll_ew"
+        if out_vv:
+            return "eevv_ew"
+        if out_lepton_pair:
+            return "eell_ew"
+
+    # pp collisions
+    if is_pp:
+        if out_top and out_h:
+            return "pphtt_ew"
+        if out_top:
+            if out_jets >= 1:
+                return "ppttj_ew"
+            return "pptt_ew"
+        if out_h and out_v_count >= 2:
+            # pp → H V V (e.g. H W W) — NLO EW library
+            return "pphvv_ew"
+        if out_vv:
+            return "ppvv_ew"
+        if out_h and out_lepton_pair:
+            return "pphll_ew"
+        if out_lepton_pair:
+            if out_jets >= 1:
+                return "ppllj_ew"
+            return "pp2l2nj_ew"
+        if out_h and out_v_count >= 1:
+            # pp → V H (Higgsstrahlung NLO EW)
+            return "pphv_ew"
+
+    return None
+
+
+def has_ew_nlo_library(process: str) -> bool:
+    """Quick check: is an EW NLO library installed for this process?
+
+    Returns True if the relevant library appears in ``installed_processes()``.
+    Use ``ew_nlo_library_for(process)`` to discover the expected name.
+    """
+    libname = ew_nlo_library_for(process)
+    if libname is None:
+        return False
+    return libname in installed_processes()

@@ -28,6 +28,16 @@ m_H    = symbols("m_H",    positive=True)   # Higgs mass ≈ 125.1 GeV
 m_W    = symbols("m_W",    positive=True)   # W mass ≈ 80.4 GeV
 sin2_W = symbols("sin2_W", positive=True)   # sin²(θ_W) ≈ 0.231
 
+# BSM symbols (Z′ + scalar dark matter portal model).  Numerical defaults
+# in the cross-section integrator: g_Zp ≈ 0.1 (mediator coupling), m_Zp =
+# 1500 GeV (LEP-allowed lower bound for a leptophilic Z′), m_chi = 100 GeV
+# (heavy DM candidate), Γ_Zp = g_Zp² m_Zp/(12π) ≈ 4 GeV.  Users override
+# via `coupling_vals={...}` in `total_cross_section`.
+g_Zp     = symbols("g_Zp",     positive=True)   # Z′-fermion coupling
+m_Zp     = symbols("m_Zp",     positive=True)   # Z′ mass
+m_chi    = symbols("m_chi",    positive=True)   # scalar DM mass
+Gamma_Zp = symbols("Gamma_Zp", positive=True)   # Z′ total width
+
 
 # ── Curated fallback amplitudes ───────────────────────────────────────────────
 
@@ -477,6 +487,14 @@ def _zz_msq_numerical(s_val: float, t_val: float, u_val: float,
 
     # Transverse polarisation sums.  k1·k2 = (s − 2 m_Z²)/2 > 0 above
     # threshold.
+    # NOTE: this is a HIGH-s approximation (Goldstone equivalence) which
+    # under-counts σ by ~20% near threshold (MG5 ee→ZZ benchmark 2026-05-11:
+    # engine -19% at √s=200 GeV).  A full unitary-gauge sum (-g + kk/m²)
+    # would be correct IF the amplitude satisfied the Ward identity
+    # k_μ M^{μν} = 0, but our t+u amplitude implementation breaks this
+    # (σ blows up at high s with full sum).  Fixing requires finding the
+    # gauge-invariance violation in M_t, M_u or rewriting via the HPZ
+    # helicity-amplitude approach.  v0.3 follow-up.
     eta = np.diag([1.0, -1.0, -1.0, -1.0])
     minus_g = -eta.astype(complex)
     k1k2 = float(K1 @ eta @ K2)
@@ -603,9 +621,14 @@ def _ew_ee_to_zz() -> AmplitudeResult:
         notes=(
             "Massless-electron limit, massive Z bosons. "
             "Couplings c_V = -1/2 + 2 sin²θ_W, c_A = -1/2. "
-            "Uses transverse polarisation sum Σ_T (Goldstone-equivalence "
-            "physical for massless e: longitudinal Z decouples). "
-            "Validated against inclusive LO theory to <10% across √s ∈ [189, 1000] GeV."
+            "Uses transverse polarisation sum Σ_T — high-s approximation "
+            "(Goldstone equivalence).  This UNDER-counts σ by ~20% near "
+            "threshold (MG5 benchmark 2026-05-11: engine -19% at √s=200 GeV, "
+            "-9% at 500 GeV).  Switching to full unitary-gauge sum breaks "
+            "gauge invariance (σ → ∞ at high s).  v0.3 fix: rewrite as "
+            "HPZ-style helicity-amplitude evaluator with proper polarization "
+            "vectors per helicity (analogous to qqbar_ww_helicity / "
+            "enubar_wz_helicity)."
         ),
         backend="curated",
     )
@@ -906,6 +929,197 @@ def _ew_z_to_ffbar() -> AmplitudeResult:
     )
 
 
+def _ew_z_to_ll_per_flavor(lepton: str) -> AmplitudeResult:
+    """Z → ℓ⁺ℓ⁻ for a concrete lepton flavour (massive lepton kept).
+
+    Neutral-current with v_ℓ = -1/2 + 2 sin²θ_W ≈ -0.04 and a_ℓ = -1/2.
+    Spin-averaged |M̄|² (sum over Z polarisations / 3, sum over lepton spins):
+
+        |M̄|² = (g_Z²/6) (v_ℓ² + a_ℓ²) × 2 m_Z²    (massless)
+
+    Mass corrections enter as 1 - 4m_ℓ²/m_Z² in the kinematic Källén factor
+    of the partial width.  Universal across e/μ/τ in the massless limit.
+
+        Γ(Z→ℓ⁺ℓ⁻) = g_Z² m_Z (v_ℓ² + a_ℓ²) / (48π) ≈ 84 MeV (PDG 83.99 MeV)
+
+    Ref: PDG 2024 §10; Peskin & Schroeder §20.2; Renton "EW Interactions" §5.
+    """
+    v_l = -Rational(1, 2) + 2 * sin2_W
+    a_l = -Rational(1, 2)
+    msq = (g_Z**2 / 6) * (v_l**2 + a_l**2) * 2 * m_Z**2
+    return AmplitudeResult(
+        process=f"Z -> {lepton}+ {lepton}-",
+        theory="EW",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Neutral-current Z → {lepton}⁺{lepton}⁻ leptonic decay",
+        notes=(
+            f"v_{lepton} = -1/2 + 2 sin²θ_W ≈ -0.04, a_{lepton} = -1/2.  "
+            "Universal across e/μ/τ in the massless limit.  PDG 2024 "
+            "Γ(Z→ℓℓ̄) = 83.99 MeV.  Ref: PDG 2024 §10; P&S §20.2."
+        ),
+        backend="curated",
+    )
+
+
+def _ew_z_to_nunu(generation: str) -> AmplitudeResult:
+    """Z → ν ν̄ for a concrete neutrino generation (PDG ~167 MeV per flavour).
+
+    Neutrinos are pure-isospin partners: v_ν = +1/2, a_ν = +1/2 →
+    v_ν² + a_ν² = 1/2.
+
+        Γ(Z→νν̄) = g_Z² m_Z / (96π) ≈ 167 MeV per generation (PDG 165.6 MeV).
+
+    Ref: PDG 2024 §10; Schwartz §29.4.
+    """
+    v_nu = Rational(1, 2)
+    a_nu = Rational(1, 2)
+    msq = (g_Z**2 / 6) * (v_nu**2 + a_nu**2) * 2 * m_Z**2
+    return AmplitudeResult(
+        process=f"Z -> nu_{generation} nu_{generation}~",
+        theory="EW",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Neutral-current Z → ν_{generation} ν̄_{generation}",
+        notes=(
+            "v_ν = a_ν = +1/2 → v² + a² = 1/2 (pure isospin partners).  "
+            "Γ(Z→νν̄) = g_Z² m_Z/(96π) ≈ 167 MeV.  "
+            "Sum over 3 generations: Γ_inv = 3 × 167 = 500 MeV (PDG 499.0 MeV).  "
+            "Ref: PDG 2024 §10; Schwartz §29.4."
+        ),
+        backend="curated",
+    )
+
+
+def _ew_z_to_qqbar_per_flavor(quark: str) -> AmplitudeResult:
+    """Z → q q̄ for a concrete quark flavour (with N_c = 3 colour factor).
+
+    v_u = +1/2 - (4/3) sin²θ_W ≈ +0.19   for u/c (top is m_t > m_Z/2 → off-shell only)
+    v_d = -1/2 + (2/3) sin²θ_W ≈ -0.35   for d/s/b
+    a_u = +1/2,  a_d = -1/2
+
+    Spin-averaged, colour-summed:
+        |M̄|² = N_c × (g_Z²/6) (v_q² + a_q²) × 2 m_Z²
+        Γ(Z→qq̄) = N_c × g_Z² m_Z (v_q² + a_q²) / (48π)
+
+    PDG 2024: Γ(Z→had) = 1744 MeV (sum over u, d, s, c, b channels).
+
+    Ref: PDG 2024 §10; Renton "EW Interactions" §5.
+    """
+    is_up = quark in ("u", "c")  # m_t > m_Z/2 → off-shell only, not curated
+    if is_up:
+        v_q = Rational(1, 2) - Rational(4, 3) * sin2_W
+        a_q = Rational(1, 2)
+    else:
+        v_q = -Rational(1, 2) + Rational(2, 3) * sin2_W
+        a_q = -Rational(1, 2)
+    N_c_factor = 3
+    msq = N_c_factor * (g_Z**2 / 6) * (v_q**2 + a_q**2) * 2 * m_Z**2
+    return AmplitudeResult(
+        process=f"Z -> {quark} {quark}~",
+        theory="EW",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Neutral-current Z → {quark}{quark}̄ (N_c = 3 colour summed)",
+        notes=(
+            f"{'Up' if is_up else 'Down'}-type quark.  "
+            f"v_{quark} = ±1/2 ∓ (Q × 2 sin²θ_W), a_{quark} = ±1/2.  "
+            f"Γ(Z→{quark}{quark}̄) ≈ {'300 MeV (u/c)' if is_up else '375 MeV (d/s/b)'} "
+            "per flavour at PDG values.  Total Γ(Z→had) = 1744 MeV.  "
+            "Ref: PDG 2024 §10."
+        ),
+        backend="curated",
+    )
+
+
+def _ew_h_to_ll_per_flavor(lepton: str) -> AmplitudeResult:
+    """H → ℓ⁺ℓ⁻ for a concrete charged-lepton flavour (Yukawa coupling).
+
+    The HVV coupling is the Yukawa y_ℓ = m_ℓ/v with v = (√2 G_F)^{-1/2} ≈ 246 GeV.
+    Vertex factor i y_ℓ; spin-summed |M|² (no average — scalar parent)::
+
+        Σ|M|² = y_ℓ² × Tr[(p̸₁ + m_ℓ)(p̸₂ - m_ℓ)]
+              = y_ℓ² × [4 (p₁·p₂) - 4 m_ℓ²]
+              = y_ℓ² × 2 (m_H² - 4 m_ℓ²)              (using p₁·p₂ = (m_H² - 2m_ℓ²)/2)
+
+    Partial width::
+
+        Γ(H→ℓ⁺ℓ⁻) = G_F m_ℓ² m_H β_ℓ³ / (4π√2)        β_ℓ = √(1 - 4m_ℓ²/m_H²)
+
+    PDG 2024 / LHC HWG YR4:
+        Γ(H→ττ) ≈ 0.257 MeV  (BR ≈ 6.3 %)
+        Γ(H→μμ) ≈ 0.89  keV  (BR ≈ 2.2 × 10⁻⁴)
+        Γ(H→ee) ≈ 5e-9 MeV (BR ≈ 5 × 10⁻⁹) — negligible
+
+    Ref: Higgs Hunter's Guide eq. 2.7 (Gunion-Haber-Kane-Dawson 1990);
+    LHC HWG YR4 §1; PDG 2024 §11.
+    """
+    y_l = symbols(f"y_{lepton}", positive=True)  # m_ℓ/v Yukawa
+    m_l = symbols(f"m_{lepton}", positive=True)
+    # Factor of 2 from the trace Tr[(p̸₁+m)(p̸₂-m)] = 4(p₁·p₂) - 4m²
+    # = 2(m_H² - 4m²); see derivation in docstring.
+    msq = 2 * (y_l**2) * (m_H**2 - 4 * m_l**2)
+    return AmplitudeResult(
+        process=f"H -> {lepton}+ {lepton}-",
+        theory="EW",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Higgs decay H → {lepton}⁺{lepton}⁻ via Yukawa coupling y_{lepton} = m_{lepton}/v",
+        notes=(
+            f"Γ(H→{lepton}⁺{lepton}⁻) = G_F m_{lepton}² m_H β³/(4π√2) with "
+            f"β = √(1 - 4m_{lepton}²/m_H²).  "
+            f"PDG 2024: Γ(H→ττ)=0.257 MeV, Γ(H→μμ)=0.89 keV, Γ(H→ee)≈ negligible.  "
+            "Ref: Higgs Hunter's Guide eq. 2.7; LHC HWG YR4."
+        ),
+        backend="curated",
+    )
+
+
+def _ew_h_to_qqbar_per_flavor(quark: str) -> AmplitudeResult:
+    """H → q q̄ for a concrete down-type / charm quark (Yukawa coupling).
+
+    Same Yukawa structure as H → ℓ⁺ℓ⁻ but × N_c = 3 for colour-summed
+    final state.  The mass that enters is the MS-bar running mass at scale
+    m_H ≈ 125 GeV — the engine substitutes m_b(m_H) ≈ 2.95 GeV (vs the
+    pole mass 4.18 GeV) at integration time, bringing Γ(H→bb̄) from
+    ~4.3 MeV (pole) to 2.4 MeV (PDG 2.41 MeV).
+
+        Γ(H→qq̄) = N_c × G_F m_q² m_H β_q³ / (4π√2)
+
+    NLO QCD K-factor ≈ 1.13 (Braaten-Leveille / Drees-Hikasa) is applied
+    by the decay-width API endpoint when ``order=NLO`` is requested.
+
+    Defined for q ∈ {b, c} only — top is excluded since 2 m_t = 345 GeV ≫ m_H,
+    and lighter quarks (s, d, u) have negligible Γ(H→qq̄) below the keV
+    level due to m_q² suppression.
+
+    Ref: Spira PRD 50 (1994) 4525; Bardeen-Leveille NPB 191 (1981) 67;
+    LHC HWG YR4.
+    """
+    if quark not in ("b", "c"):
+        raise ValueError(f"_ew_h_to_qqbar_per_flavor only supports b, c (got {quark!r})")
+    y_q = symbols(f"y_{quark}", positive=True)  # MS-bar Yukawa at m_H
+    m_q = symbols(f"m_{quark}", positive=True)
+    N_c_factor = 3
+    # Factor of 2 from the Dirac trace (see _ew_h_to_ll_per_flavor docstring).
+    msq = 2 * N_c_factor * (y_q**2) * (m_H**2 - 4 * m_q**2)
+    return AmplitudeResult(
+        process=f"H -> {quark} {quark}~",
+        theory="EW",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Higgs decay H → {quark}{quark}̄ (N_c = 3, MS-bar mass at m_H)",
+        notes=(
+            f"y_{quark} substituted at integration time as m_{quark}(m_H)/v.  "
+            f"For b: m_b(m_H) ≈ 2.95 GeV → Γ(H→bb̄) ≈ 2.4 MeV (PDG 2.41 MeV).  "
+            f"For c: m_c(m_H) ≈ 0.62 GeV → Γ(H→cc̄) ≈ 0.118 MeV (PDG 0.117 MeV).  "
+            "NLO QCD K = 1.13 applied via order=NLO in the decay-width API.  "
+            "Ref: Spira PRD 50 (1994) 4525; LHC HWG YR4."
+        ),
+        backend="curated",
+    )
+
+
 def _ew_w_to_lnu(charge: str, flavor: str) -> AmplitudeResult:
     """W± → ℓ± ν leptonic decay (massless lepton limit).
 
@@ -969,14 +1183,16 @@ def _ew_w_to_qq() -> AmplitudeResult:
 
 
 def _ew_h_to_ffbar() -> AmplitudeResult:
-    """H → f f̄ (Higgs to fermion pair).
+    """H → f f̄ (Higgs to fermion pair, generic template).
 
     The Yukawa coupling is -i m_f / v, where v = (√2 G_F)^{-1/2} ≈ 246 GeV.
-    Spin-summed |M|² including mass effects:
-        Σ|M|² = (m_f²/v²) × 2(q₁·q₂ - m_f²) = (m_f²/v²)(m_H² - 4m_f²)
+    Spin-summed |M|² (Dirac trace Tr[(p̸₁+m_f)(p̸₂-m_f)] = 4 p₁·p₂ - 4m_f²
+    with p₁·p₂ = (m_H² - 2m_f²)/2):
+
+        Σ|M|² = (m_f²/v²) × [4 p₁·p₂ - 4 m_f²] = (m_f²/v²) × 2 (m_H² - 4 m_f²)
 
     No spin average for scalar parent (2J+1 = 1):
-        |M̄|² = N_c × (m_f²/v²)(m_H² - 4m_f²)
+        |M̄|² = 2 N_c × (m_f²/v²)(m_H² - 4m_f²)
 
     Partial width:
         Γ(H→ff̄) = N_c G_F m_f² m_H / (4π√2) × β_f³
@@ -986,7 +1202,10 @@ def _ew_h_to_ffbar() -> AmplitudeResult:
     """
     m_f = symbols("m_f", positive=True)
     v_ew = symbols("v", positive=True)  # EW vev ≈ 246 GeV
-    msq = N_c_sym * (m_f**2 / v_ew**2) * (m_H**2 - 4 * m_f**2)
+    # Factor of 2 from the Dirac trace; see derivation above.  Earlier
+    # versions of this function dropped the 2, halving Γ — bug fixed
+    # 2026-05-10 after concrete H→ℓℓ̄ entries showed -50 % vs PDG.
+    msq = 2 * N_c_sym * (m_f**2 / v_ew**2) * (m_H**2 - 4 * m_f**2)
     return AmplitudeResult(
         process="H -> f f~",
         theory="EW",
@@ -1269,29 +1488,76 @@ def _ew_ee_to_qqbar_per_flavor(quark: str) -> AmplitudeResult:
 
 
 def _ew_qqbar_to_ll_per_flavor(quark: str, lepton: str) -> AmplitudeResult:
-    """qq̄ → ℓ⁺ℓ⁻ Drell-Yan via s-channel γ for a specific quark + lepton flavour.
+    """qq̄ → ℓ⁺ℓ⁻ Drell-Yan with full γ+Z exchange (Breit-Wigner Z propagator).
 
-    Massless-fermion, far-from-Z-pole form (pure QED s-channel):
-        |M̄|²(qq̄ → ℓ⁺ℓ⁻) = (2/3) × Q_q² × Q_ℓ² × e⁴ × (t² + u²)/s²
+    Crossed version of e+e- → q q̄: same s-channel diagrams (γ, Z), but with
+    initial-state colour averaging 1/N_c² = 1/9 instead of final-state
+    colour summing N_c = 3.  Net colour factor between the two is 1/N_c² ⋅
+    (1/N_c)⁻¹ = 1/N_c³ ⋅ ... — easier to write the formula directly.
 
-    With Q_ℓ = ±1 for charged leptons.  Colour-averaged 1/N_c = 1/3
-    baked in.  Use this for partonic queries (e.g. ``u u~ → e+ e-``);
-    the hadronic Drell-Yan path uses the full γ+Z propagator
-    (``_drell_yan_sigma_hat``).
+    Symmetric (t²+u²) angular structure:
+        |M̄|² = (1/N_c) × (e⁴/s²) (t²+u²) × {Q_q² Q_ℓ²
+              + 2 Q_q Q_ℓ v_q v_ℓ Re(χ)/(4 s²W c²W)
+              + |χ|² (v_q²+a_q²)(v_ℓ²+a_ℓ²)/(4 s²W c²W)²}
+
+    plus antisymmetric (u²−t²) terms for A_FB.  Same conventions as
+    ``_ew_ee_to_qqbar_full``: χ(s) = s/(s − m_Z² + i m_Z Γ_Z); v_f =
+    T₃ − 2Q sin²θ_W, a_f = T₃.
+
+    Far from the Z pole, |χ| → 1 and the formula reduces to:
+        |M̄|² ≈ (2/N_c) × Q_q² Q_ℓ² e⁴ (t²+u²)/s²  + (Z corrections O(20%))
+
+    At LHC energies (√ŝ ≫ m_Z), Z exchange contributes ~30-50% of σ on
+    top of the pure-QED value — required for percent-level OL agreement.
     """
     Q_q = _QUARK_CHARGE_FRAC[quark]
-    Q_l = -1  # charged leptons have Q = -1 (electrons, muons, taus)
-    msq = Rational(2, 3) * e_em**4 * Q_q**2 * Q_l**2 * (t**2 + u**2) / s**2
+    Q_l = -1  # charged leptons (e, μ, τ) all have Q = −1
+
+    # Z-fermion couplings (V−A): v_f = T₃ − 2Q sin²θ_W, a_f = T₃
+    sw2 = sin2_W
+    cw2 = 1 - sin2_W
+    is_up = quark in ("u", "c", "t")
+    T3_q = Rational(1, 2) if is_up else -Rational(1, 2)
+    v_q = T3_q - 2 * Q_q * sw2
+    a_q = T3_q
+    T3_l = -Rational(1, 2)
+    v_l = T3_l - 2 * Q_l * sw2
+    a_l = T3_l
+
+    Gamma_Z = 2.4952  # PDG
+    chi_denom_sq = (s - m_Z**2)**2 + (m_Z * Gamma_Z)**2
+    abs_chi_sq = s**2 / chi_denom_sq
+    re_chi = s * (s - m_Z**2) / chi_denom_sq
+
+    pure_QED = 2 * e_em**4 * (t**2 + u**2) / s**2 * (Q_q * Q_l)**2
+
+    norm = 1 / (4 * sw2 * cw2)
+    int_factor = 2 * Q_q * Q_l * v_q * v_l * norm
+    zz_factor = (v_q**2 + a_q**2) * (v_l**2 + a_l**2) * norm**2
+
+    interference = 2 * e_em**4 * (t**2 + u**2) / s**2 * int_factor * re_chi
+    zz = 2 * e_em**4 * (t**2 + u**2) / s**2 * zz_factor * abs_chi_sq
+
+    int_afb = 2 * Q_q * Q_l * a_q * a_l * norm
+    zz_afb = 4 * v_q * a_q * v_l * a_l * norm**2
+    afb_int = 2 * e_em**4 * (u**2 - t**2) / s**2 * int_afb * re_chi
+    afb_zz = 2 * e_em**4 * (u**2 - t**2) / s**2 * zz_afb * abs_chi_sq
+
+    # 1/N_c colour average for initial-state qq̄ pair (no final-state colour
+    # factor since leptons are colourless).
+    msq = Rational(1, 3) * (pure_QED + interference + zz + afb_int + afb_zz)
+
     return AmplitudeResult(
         process=f"{quark} {quark}~ -> {lepton}+ {lepton}-",
         theory="QCD",
         msq=msq,
         msq_latex=latex(msq),
-        description=f"Drell-Yan: {quark}{quark}̄ → {lepton}⁺{lepton}⁻ via s-channel γ (pure QED)",
+        description=f"Drell-Yan: {quark}{quark}̄ → {lepton}⁺{lepton}⁻ via s-channel γ + Z (full V-A, BW Z)",
         notes=(
             f"Colour-averaged (1/N_c = 1/3). Q_{quark} = {Q_q} baked in. "
-            "Pure QED form valid far from Z pole; for resonance physics use "
-            "``_ew_ee_to_ll_neutral_current`` analog or hadronic DY path."
+            "Full γ+Z formula with Breit-Wigner Z propagator; reproduces "
+            "~30-50% Z enhancement above the Z pole and the LEP-1 "
+            "Z resonance peak when integrated through the hadronic DY path."
         ),
         backend="curated",
     )
@@ -1435,12 +1701,11 @@ def _ew_ee_to_ll_neutral_current(final_lepton: str = "mu") -> AmplitudeResult:
     # can't carry a complex quantity through.  Numerical integrator
     # handles the |χ|² and Re(χ) pieces by substituting m_Z, Γ_Z later.
     Gamma_Z = 2.4952  # PDG
-    chi_denom_re = s - m_Z**2
     chi_denom_sq = (s - m_Z**2)**2 + (m_Z * Gamma_Z)**2
 
-    # |χ|² × s² and Re(χ) × s structure
-    chi_sq_factor = s**2 / chi_denom_sq
-    chi_re_factor = s * chi_denom_re / chi_denom_sq
+    # χ(s) = s / (s − m_Z² + i m_Z Γ_Z) — dimensionless propagator ratio.
+    abs_chi_sq = s**2 / chi_denom_sq
+    re_chi = s * (s - m_Z**2) / chi_denom_sq
 
     # Full |M|² (massless leptons; angular structure 1+cos²θ for vector,
     # cos θ asymmetry for V·A). Integrated over isotropic angles:
@@ -1456,8 +1721,8 @@ def _ew_ee_to_ll_neutral_current(final_lepton: str = "mu") -> AmplitudeResult:
     int_factor = 2 * Q_e * Q_l * v_e * v_l * norm
     zz_factor = (v_e**2 + a_e**2) * (v_l**2 + a_l**2) * norm**2
 
-    interference = 2 * e_em**4 * (t**2 + u**2) / s**2 * int_factor * chi_re_factor / s
-    zz = 2 * e_em**4 * (t**2 + u**2) / s**2 * zz_factor * chi_sq_factor / s**2 * s**2
+    interference = 2 * e_em**4 * (t**2 + u**2) / s**2 * int_factor * re_chi
+    zz = 2 * e_em**4 * (t**2 + u**2) / s**2 * zz_factor * abs_chi_sq
 
     # Antisymmetric (u²−t²) parts — γ-Z and Z-Z axial × vector cross terms
     # responsible for forward-backward asymmetry A_FB.  In our Mandelstam
@@ -1467,8 +1732,8 @@ def _ew_ee_to_ll_neutral_current(final_lepton: str = "mu") -> AmplitudeResult:
     int_afb = 2 * Q_e * Q_l * a_e * a_l * norm
     zz_afb = 4 * v_e * a_e * v_l * a_l * norm**2
 
-    afb_int = 2 * e_em**4 * (u**2 - t**2) / s**2 * int_afb * chi_re_factor / s
-    afb_zz = 2 * e_em**4 * (u**2 - t**2) / s**2 * zz_afb * chi_sq_factor / s**2 * s**2
+    afb_int = 2 * e_em**4 * (u**2 - t**2) / s**2 * int_afb * re_chi
+    afb_zz = 2 * e_em**4 * (u**2 - t**2) / s**2 * zz_afb * abs_chi_sq
 
     msq = pure_QED + interference + zz + afb_int + afb_zz
 
@@ -1525,8 +1790,8 @@ def _ew_ee_to_qqbar_full(quark: str) -> AmplitudeResult:
 
     Gamma_Z = 2.4952  # PDG
     chi_denom_sq = (s - m_Z**2)**2 + (m_Z * Gamma_Z)**2
-    chi_sq_factor = s**2 / chi_denom_sq
-    chi_re_factor = s * (s - m_Z**2) / chi_denom_sq
+    abs_chi_sq = s**2 / chi_denom_sq
+    re_chi = s * (s - m_Z**2) / chi_denom_sq
 
     N_c = 3  # final-state colour sum
     pure_QED = 2 * e_em**4 * (t**2 + u**2) / s**2 * (Q_e * Q_q)**2
@@ -1535,14 +1800,14 @@ def _ew_ee_to_qqbar_full(quark: str) -> AmplitudeResult:
     int_factor = 2 * Q_e * Q_q * v_e * v_q * norm
     zz_factor = (v_e**2 + a_e**2) * (v_q**2 + a_q**2) * norm**2
 
-    interference = 2 * e_em**4 * (t**2 + u**2) / s**2 * int_factor * chi_re_factor / s
-    zz = 2 * e_em**4 * (t**2 + u**2) / s**2 * zz_factor * chi_sq_factor / s**2 * s**2
+    interference = 2 * e_em**4 * (t**2 + u**2) / s**2 * int_factor * re_chi
+    zz = 2 * e_em**4 * (t**2 + u**2) / s**2 * zz_factor * abs_chi_sq
 
     # Antisymmetric (u²−t²) parts for forward-backward asymmetry A_FB.
     int_afb = 2 * Q_e * Q_q * a_e * a_q * norm
     zz_afb = 4 * v_e * a_e * v_q * a_q * norm**2
-    afb_int = 2 * e_em**4 * (u**2 - t**2) / s**2 * int_afb * chi_re_factor / s
-    afb_zz = 2 * e_em**4 * (u**2 - t**2) / s**2 * zz_afb * chi_sq_factor / s**2 * s**2
+    afb_int = 2 * e_em**4 * (u**2 - t**2) / s**2 * int_afb * re_chi
+    afb_zz = 2 * e_em**4 * (u**2 - t**2) / s**2 * zz_afb * abs_chi_sq
 
     msq = N_c * (pure_QED + interference + zz + afb_int + afb_zz)
 
@@ -1735,12 +2000,17 @@ def _ew_qqbar_to_lnu(up_quark: str, down_quark: str, lepton: str) -> AmplitudeRe
     """q_u q̄_d → ℓ⁺ν_ℓ charged-current Drell-Yan via s-channel W.
 
     Single s-channel W⁺ diagram (massless fermion limit, CKM-diagonal):
-        |M̄|² = (g_W⁴ / 36) × t² / [(s − m_W²)² + m_W² Γ_W²]
+        |M̄|² = (g_W⁴ / 12) × t² / [(s − m_W²)² + m_W² Γ_W²]
 
-    The 1/36 = 1/(4×9) from spin×colour averaging × the V-A trace factor.
+    The 1/12 = 1/(4 × N_c) = 1/(4 × 3) from spin×colour averaging.
     Trace: Tr[γ^μ PL /p_u γ^ν PL /p_d̄] × Tr[γ_μ PL /p_e γ_ν PL /p_ν]
-         = 16 (p_u · p_e)(p_d̄ · p_ν) = 16 × (t/2)² = 4 t²
-    Hence |M̄|² ∝ t² / |denom|².
+         = 16 (p_u · p_e)(p_d̄ · p_ν) = 16 × (t/2)² = 4 t².
+
+    Colour averaging: incoming q (N_c states) × q̄ (N_c states) = N_c²
+    initial states; the W-vertex δ^{ab} produces N_c after squaring.
+    Net colour factor: N_c × (1/N_c²) = 1/N_c (NOT 1/N_c² as in earlier
+    versions of this formula — fixed 2026-05-04 after OL cross-check
+    showed σ_curated/σ_OL = 0.32 ≈ 1/3 across all CC partonic flavours).
 
     Breit-Wigner regularisation (Γ_W = 2.085 GeV, PDG 2024) keeps σ
     finite at the W pole.
@@ -1753,7 +2023,7 @@ def _ew_qqbar_to_lnu(up_quark: str, down_quark: str, lepton: str) -> AmplitudeRe
     Ref: Greiner & Mueller; P&S §20; PDG 2024 (Γ_W = 2.085 GeV).
     """
     Gamma_W = 2.085  # PDG 2024
-    msq = g_W**4 * t**2 / (36 * ((s - m_W**2)**2 + (m_W * Gamma_W)**2))
+    msq = g_W**4 * t**2 / (12 * ((s - m_W**2)**2 + (m_W * Gamma_W)**2))
     proc = f"{up_quark} {down_quark}~ -> {lepton}+ nu_{lepton}"
     return AmplitudeResult(
         process=proc,
@@ -1763,6 +2033,7 @@ def _ew_qqbar_to_lnu(up_quark: str, down_quark: str, lepton: str) -> AmplitudeRe
         description=f"Charged-current Drell-Yan: {up_quark}{down_quark}̄ → {lepton}⁺ν_{lepton} via s-channel W",
         notes=(
             "Diagonal CKM (|V_qq'|² = 1) approximation. "
+            "Spin×colour averaging: 1/(4 N_c) = 1/12.  "
             "Breit-Wigner Γ_W = 2.085 GeV regulates the W pole. "
             "Same partonic |M̄|² as the canonical ud̄ → e⁺ν_e formula. "
             "Ref: Greiner & Mueller; P&S §20."
@@ -1774,7 +2045,8 @@ def _ew_qqbar_to_lnu(up_quark: str, down_quark: str, lepton: str) -> AmplitudeRe
 def _ew_qbarq_to_lnubar(up_quark: str, down_quark: str, lepton: str) -> AmplitudeResult:
     """q̄_u q_d → ℓ⁻ν̄_ℓ charge-conjugate of the CC Drell-Yan above (W⁻ exchange)."""
     Gamma_W = 2.085
-    msq = g_W**4 * t**2 / (36 * ((s - m_W**2)**2 + (m_W * Gamma_W)**2))
+    # Same 1/(4 N_c) = 1/12 colour×spin averaging as the W+ case above.
+    msq = g_W**4 * t**2 / (12 * ((s - m_W**2)**2 + (m_W * Gamma_W)**2))
     proc = f"{up_quark}~ {down_quark} -> {lepton}- nu_{lepton}~"
     return AmplitudeResult(
         process=proc,
@@ -1824,10 +2096,13 @@ def _qcd_qqbar_to_gammagamma_per_flavor(quark: str) -> AmplitudeResult:
 def _qcd_qqbar_to_gammag_per_flavor(quark: str) -> AmplitudeResult:
     """qq̄ → γg for a specific quark flavour (Q_q hard-coded).
 
-    Colour-averaged |M̄|² = -(8/9) Q_q² e² g_s² (t/u + u/t).
+    Colour-averaged |M̄|² = (8/9) Q_q² e² g_s² (t/u + u/t).
+
+    Sign convention: t, u < 0 in the physical region, so t/u and u/t are both
+    positive (their sum ≥ 2 by AM–GM), giving |M̄|² > 0 as required.
     """
     Q_q = _QUARK_CHARGE_FRAC[quark]
-    msq = -Rational(8, 9) * e_em**2 * g_s**2 * Q_q**2 * (t / u + u / t)
+    msq = Rational(8, 9) * e_em**2 * g_s**2 * Q_q**2 * (t / u + u / t)
     return AmplitudeResult(
         process=f"{quark} {quark}~ -> gamma g",
         theory="QCD",
@@ -1868,14 +2143,15 @@ def _qcd_qqbar_to_gammag() -> AmplitudeResult:
 
     Two diagrams: t-channel and u-channel quark exchange.
     Colour-averaged |M̄|²:
-        |M̄|² = -(8/9) Q_q² e² g_s² (t/u + u/t)
+        |M̄|² = (8/9) Q_q² e² g_s² (t/u + u/t)
 
-    The negative sign is because t, u < 0 and (t/u + u/t) < -2.
+    With t, u < 0 in the physical region, t/u and u/t are both positive
+    (their sum ≥ 2 by AM–GM), giving |M̄|² > 0 as required.
 
-    Ref: Field §3.5; CalcHEP; Owens, Rev. Mod. Phys. 59 (1987).
+    Ref: Field §3.5; CalcHEP; Owens, Rev. Mod. Phys. 59 (1987) Table I.
     """
     Q_q = symbols("Q_q", real=True)
-    msq = -Rational(8, 9) * e_em**2 * g_s**2 * Q_q**2 * (t / u + u / t)
+    msq = Rational(8, 9) * e_em**2 * g_s**2 * Q_q**2 * (t / u + u / t)
     return AmplitudeResult(
         process="q q~ -> gamma g",
         theory="QCD",
@@ -1924,16 +2200,23 @@ def _qcd_qg_to_qgamma() -> AmplitudeResult:
 def _qcd_gammag_to_qqbar() -> AmplitudeResult:
     """γg → uū (photoproduction of up-quark pairs).
 
-    Crossing of uū → γg:
-        |M̄|² = (1/2) Q_u² e² g_s² (t/u + u/t)
+    Crossing of qq̄ → γg with proper averaging-factor ratio.
 
-    The 1/2 comes from averaging over photon + gluon initial-state helicities
-    and colours vs the qq̄ case.  Q_u² = 4/9 baked in (specific to up-type).
+        |M̄|² = (9/8) Q_q² e² g_s² (t/u + u/t)
 
-    Ref: Field; CalcHEP.
+    Coefficient derivation: |M̄|²(γg→qq̄) / |M̄|²(qq̄→γg) =
+    (avg_factor_γg / avg_factor_qqbar) × (sum_final_γg→qq / sum_final_qq→γg)
+    = (1/32 ÷ 1/36) × (9·4 ÷ 8·4) = (36/32) × (9/8) = 81/64.
+    Applied to Field's |M̄|²(qq̄→γg) = (8/9) e² g_s² Q² (t/u + u/t):
+      |M̄|²(γg→qq̄) = (81/64) × (8/9) × … = (9/8) × e² g_s² Q² (t/u + u/t).
+
+    The previous coefficient 1/2 was off by factor 2.25 (verified against
+    OL Born; bug fix 2026-05-11).
+
+    Ref: Field §3.5; Owens RMP 59 (1987); crossing from Combridge qq̄→γg.
     """
     Q_u_sq = Rational(4, 9)  # (2/3)^2
-    msq = Rational(1, 2) * e_em**2 * g_s**2 * Q_u_sq * (t / u + u / t)
+    msq = Rational(9, 8) * e_em**2 * g_s**2 * Q_u_sq * (t / u + u / t)
     return AmplitudeResult(
         process="gamma g -> u u~",
         theory="QCD",
@@ -1941,9 +2224,10 @@ def _qcd_gammag_to_qqbar() -> AmplitudeResult:
         msq_latex=latex(msq),
         description="Photoproduction of quark pairs from photon-gluon fusion",
         notes=(
-            "Crossing of qq̄→γg. Q_q = quark charge. "
-            "Important for photoproduction at HERA. "
-            "Ref: Field; CalcHEP."
+            "Crossing of qq̄→γg with correct averaging-factor ratio 81/64. "
+            "Q_q = quark charge.  Important for photoproduction at HERA. "
+            "Bug fix 2026-05-11: coefficient was 1/2 (factor 2.25 too small). "
+            "Ref: Field; Owens RMP 59 (1987)."
         ),
         backend="curated",
     )
@@ -1989,6 +2273,218 @@ def _qcd_qiqjbar_to_qiqjbar() -> AmplitudeResult:
         msq_latex=latex(msq),
         description="Different-flavour quark-antiquark t-channel scattering",
         notes="SU(3) colour-averaged. Only t-channel. Same for all qi q̄j → qi q̄j (i≠j). Ref: Field; Combridge.",
+        backend="curated",
+    )
+
+
+# ─── BSM (Z′ portal + scalar dark matter) ────────────────────────────────────
+#
+# The bundled BSM model couples a single new Z′ vector mediator universally
+# to charged SM leptons (vector coupling g_Zp γ^μ) and to a complex scalar
+# dark-matter field χ via the standard scalar–vector vertex g_Zp(p_χ - p_χ̄)^μ.
+# This is the canonical "vector portal" used in dark-matter phenomenology
+# papers (Pospelov-Ritz-Voloshin PLB 662 (2008) 53; Hooper-Profumo PR 453
+# (2007) 29; Lin TASI 2018 lectures arXiv:1904.07915).  It is the smallest
+# extension that supports BOTH a Z′ resonance search at colliders AND a
+# scalar-DM relic-abundance / indirect-detection calculation in one model.
+#
+# Numerical conventions used by the cross-section integrator:
+#   g_Zp     ≈ 0.1   — leptophilic Z′ benchmark (LEP-allowed)
+#   m_Zp     = 1500  — heavy mediator (above LHC dilepton bounds)
+#   m_chi    = 100   — heavy scalar DM
+#   Γ_Zp     ≈ 4     — narrow-width approx Γ = g²m/(12π)
+# Users may override any of these via ``total_cross_section(coupling_vals=…)``.
+
+
+def _bsm_zp_to_ll(lepton: str) -> AmplitudeResult:
+    """Z′ → ℓ⁺ℓ⁻ leptonic decay (massless lepton limit).
+
+    Vector-only Z′-fermion vertex g_Zp γ^μ.  Spin-summed |M|² (averaged
+    over Z′ polarisations, summed over lepton spins, massless leptons)::
+
+        |M̄|² = (g_Zp² / 3) × 4 m_Zp² / 4 = (g_Zp² m_Zp²) / 3
+
+    obtained from Tr[γ^μ p̸₁ γ^ν p̸₂] (-g_{μν} + p_μp_ν/m_Zp²) = 4 m_Zp²,
+    averaging over the 3 Z′ polarisations.  Partial width::
+
+        Γ(Z′ → ℓ⁺ℓ⁻) = g_Zp² m_Zp / (12π)
+
+    Universal across charged-lepton flavours in the massless limit.
+
+    Ref: Pospelov-Ritz-Voloshin PLB 662 (2008) 53;
+    Langacker RMP 81 (2009) 1199 §III for vector-mediator widths.
+    """
+    msq = g_Zp**2 * m_Zp**2 / 3
+    return AmplitudeResult(
+        process=f"Zp -> {lepton}+ {lepton}-",
+        theory="BSM",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"Z′ leptonic decay Z′ → {lepton}⁺{lepton}⁻ (vector coupling, massless ℓ)",
+        notes=(
+            "Γ(Z′ → ℓ⁺ℓ⁻) = g_Zp² m_Zp/(12π).  Vector-only coupling g_Zp γ^μ; "
+            "spin-averaged over 3 Z′ polarisations.  Universal across e/μ/τ in "
+            "the massless limit.  Ref: Langacker RMP 81 (2009) 1199; "
+            "Pospelov-Ritz-Voloshin PLB 662 (2008) 53."
+        ),
+        backend="curated",
+    )
+
+
+def _bsm_zp_to_chichi() -> AmplitudeResult:
+    """Z′ → χ χ̄ scalar dark-matter pair decay (p-wave β³ suppressed).
+
+    Vertex: i g_Zp (p_χ - p_χ̄)^μ.  The longitudinal Z′ polarisation
+    cancels against the symmetric (p+p′)·ε structure for an on-shell Z′
+    (Goldstone equivalence in the broken phase), so only the transverse
+    polarisations contribute.  Result for a complex scalar pair::
+
+        |M̄|² = (g_Zp² m_Zp² / 3) × β_χ²    where β_χ² = 1 - 4 m_χ²/m_Zp²
+
+    Partial width (p-wave, β_χ³ suppression)::
+
+        Γ(Z′ → χχ̄) = g_Zp² m_Zp β_χ³ / (48π)
+
+    Compared to Γ(Z′→ℓℓ̄) = g_Zp²m_Zp/(12π), the DM channel is suppressed
+    by β_χ³/4.  At threshold (β_χ → 0) the DM mode shuts off entirely;
+    at high m_Zp ≫ 2m_χ it is exactly 1/4 of the leptonic mode (the
+    standard real-vs-complex-scalar prefactor).
+
+    Ref: Pospelov-Ritz-Voloshin PLB 662 (2008) 53;
+    Mambrini "Particle Dark Matter" Cambridge (2021) §3.4.
+    """
+    beta_chi_sq = 1 - 4 * m_chi**2 / m_Zp**2
+    msq = (g_Zp**2 * m_Zp**2 / 3) * beta_chi_sq
+    return AmplitudeResult(
+        process="Zp -> chi chi~",
+        theory="BSM",
+        msq=msq,
+        msq_latex=latex(msq),
+        description="Z′ decay to scalar dark-matter pair (p-wave β³)",
+        notes=(
+            "Γ(Z′ → χχ̄) = g_Zp² m_Zp β_χ³/(48π) with β_χ = √(1 - 4m_χ²/m_Zp²). "
+            "Vertex factor (p_χ - p_χ̄)^μ — only transverse Z′ polarisations "
+            "contribute.  Ratio to leptonic mode: (β_χ³/4) → 1/4 at high m_Zp, "
+            "0 at threshold.  Ref: Pospelov-Ritz-Voloshin PLB 662 (2008) 53."
+        ),
+        backend="curated",
+    )
+
+
+def _bsm_ee_to_zp_to_ll(final_lepton: str) -> AmplitudeResult:
+    """e⁺e⁻ → Z′ → ℓ⁺ℓ⁻ via s-channel Z′ resonance (Breit-Wigner regulated).
+
+    Pure vector-vector exchange — Lorentz structure identical to the QED
+    annihilation s-channel γ exchange, with α_em² → g_Zp⁴ and 1/s² →
+    1/[(s - m_Zp²)² + m_Zp² Γ_Zp²]::
+
+        |M̄|² = 2 g_Zp⁴ (t² + u²) / [(s - m_Zp²)² + m_Zp²Γ_Zp²]
+
+    On the resonance (s → m_Zp²) the cross-section saturates the
+    Breit-Wigner peak; off resonance it falls as 1/s² like ordinary QED.
+    Massless final-state leptons; massive Mandelstam s + t + u = 0.
+
+    Useful for:
+      - Z′ resonance searches (LHC dilepton bumps)
+      - LEP-2 high-energy tail constraints (Z′ contact-operator limit)
+      - Future muon-collider Z′ studies (FCC-ee, MuC)
+
+    Ref: Carena-Daleo-Dobrescu-Tait PRD 70 (2004) 093009;
+    PDG 2024 §50 "Searches for new heavy bosons".
+    """
+    Gamma_Z = Gamma_Zp  # alias for readability
+    chi_denom_sq = (s - m_Zp**2)**2 + (m_Zp * Gamma_Z)**2
+    msq = 2 * g_Zp**4 * (t**2 + u**2) / chi_denom_sq
+    return AmplitudeResult(
+        process=f"e+ e- -> {final_lepton}+ {final_lepton}-",
+        theory="BSM",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"e⁺e⁻ → ℓ⁺ℓ⁻ via s-channel Z′ ({final_lepton} final state)",
+        notes=(
+            "Pure-vector Z′ s-channel exchange with Breit-Wigner regulator.  "
+            "Same angular structure as QED γ exchange (1+cos²θ).  Resonant "
+            "peak at s = m_Zp²; off-resonance falls as 1/s².  Massless "
+            "final-state leptons.  Ref: Carena-Daleo-Dobrescu-Tait PRD 70 "
+            "(2004) 093009."
+        ),
+        backend="curated",
+    )
+
+
+def _bsm_ll_to_chichi(initial_lepton: str) -> AmplitudeResult:
+    """ℓ⁺ℓ⁻ → χ χ̄ DM pair production via s-channel Z′.
+
+    Fermion-fermion annihilation through a vector mediator into a
+    complex-scalar pair.  Spin-averaged |M|² (1/4 from initial-state
+    fermion spin average, no final-state spin)::
+
+        |M̄|² = (g_Zp⁴ / (2 |D(s)|²)) × [s² - (u-t)² - 4 s m_χ²]
+             = (g_Zp⁴ s² β_χ² sin²θ) / (2 |D(s)|²)
+
+    where |D(s)|² = (s - m_Zp²)² + m_Zp²Γ_Zp² and β_χ² = 1 - 4m_χ²/s.
+    The angular distribution is sin²θ — purely p-wave from the (p_χ-p_χ̄)^μ
+    vertex (longitudinal-Z′ piece vanishes for a complex-scalar pair).
+
+    σ(ℓℓ̄ → χχ̄) ∝ s β_χ³ / |D(s)|² is the canonical "vector portal" DM
+    pair-production cross-section quoted in muon-collider DM studies.
+
+    Ref: Berlin-Hooper-Krnjaic PRD 90 (2014) 015032 §II;
+    Lin TASI 2018 arXiv:1904.07915 §3.2.
+    """
+    chi_denom_sq = (s - m_Zp**2)**2 + (m_Zp * Gamma_Zp)**2
+    msq = (g_Zp**4 / (2 * chi_denom_sq)) * (s**2 - (u - t)**2 - 4 * s * m_chi**2)
+    return AmplitudeResult(
+        process=f"{initial_lepton}+ {initial_lepton}- -> chi chi~",
+        theory="BSM",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"{initial_lepton}⁺{initial_lepton}⁻ → χχ̄ via s-channel Z′ (DM pair production)",
+        notes=(
+            "p-wave (sin²θ) DM pair production through a vector portal.  "
+            "Massless lepton, massive scalar χ.  σ ∝ s β_χ³/|D(s)|² with "
+            "Breit-Wigner regulator — peaks on Z′ resonance.  Ref: "
+            "Berlin-Hooper-Krnjaic PRD 90 (2014) 015032; Lin TASI lectures "
+            "arXiv:1904.07915 §3.2."
+        ),
+        backend="curated",
+    )
+
+
+def _bsm_chichi_to_ll(final_lepton: str) -> AmplitudeResult:
+    """χ χ̄ → ℓ⁺ℓ⁻ DM annihilation via s-channel Z′.
+
+    Crossing of ``ℓℓ̄ → χχ̄``.  The lepton-pair → χ-pair amplitude has
+    the same Mandelstam structure, but the spin-averaging differs
+    (scalars carry no spin, fermions are summed without averaging),
+    giving a factor 4::
+
+        |M̄|² = (2 g_Zp⁴ / |D(s)|²) × [s² - (u-t)² - 4 s m_χ²]
+
+    Used for indirect-detection observables ⟨σv⟩(χχ̄ → ℓ⁺ℓ⁻).  The
+    p-wave β² suppression in σv is what makes thermally-produced scalar
+    DM via a Z′ portal hard to detect by photons from cosmic-ray-rich
+    targets — the cross-section is velocity-suppressed at the v ~ 10⁻³
+    galactic-halo speeds.
+
+    Ref: Bergstrom-Edsjö-Ullio PRL 87 (2001) 251301;
+    Berlin-Hooper-Krnjaic PRD 90 (2014) 015032 §II.
+    """
+    chi_denom_sq = (s - m_Zp**2)**2 + (m_Zp * Gamma_Zp)**2
+    msq = (2 * g_Zp**4 / chi_denom_sq) * (s**2 - (u - t)**2 - 4 * s * m_chi**2)
+    return AmplitudeResult(
+        process=f"chi chi~ -> {final_lepton}+ {final_lepton}-",
+        theory="BSM",
+        msq=msq,
+        msq_latex=latex(msq),
+        description=f"χχ̄ → {final_lepton}⁺{final_lepton}⁻ via s-channel Z′ (DM annihilation)",
+        notes=(
+            "DM annihilation σv has p-wave β² suppression — characteristic "
+            "of scalar DM through a vector portal.  Crossed from ll̄→χχ̄ "
+            "with a factor 4 from spin sum/average.  Massless leptons.  "
+            "Ref: Bergstrom-Edsjö-Ullio PRL 87 (2001) 251301; Berlin-"
+            "Hooper-Krnjaic PRD 90 (2014) 015032."
+        ),
         backend="curated",
     )
 
@@ -2039,7 +2535,12 @@ def _build_curated() -> None:
         _ew_ee_to_zh(),
         _ew_ee_to_zz(),
         _ew_tautau_to_zh(),
-        _ew_ee_to_ww(),
+        # e+ e- → W+W-: REMOVED in v0.2.2.  Old curated formula was an
+        # incomplete HPZ partial (only t-channel ν + partial interference),
+        # giving ~80 % of full LO at √s=200 GeV.  Replaced by the full
+        # helicity-amplitude evaluator (97 % vs MG5 LO).  Letting
+        # `get_amplitude` fall through to OpenLoops gives the exact
+        # numerical |M̄|² for /api/amplitude.
         _ew_enu_to_munu(),
         _ew_qqbar_to_ll(),
         # Per-flavour qq̄ → ℓ+ℓ- Drell-Yan (pure-QED far-from-Z form).
@@ -2052,11 +2553,12 @@ def _build_curated() -> None:
         *[_ew_ee_to_qqbar_per_flavor(q)
           for q in ("u", "d", "c", "s", "b", "t")],
         # Full γ+Z e+e- → qq̄ with Breit-Wigner Z propagator — captures
-        # Z peak resonance physics. Overrides the pure-QED entries
-        # registered just above.  Includes t (above-threshold massless
-        # approximation; mass corrections become important near √s = 2 m_t).
+        # Z peak resonance physics.  Overrides the pure-QED entries above.
+        # Top REMOVED 2026-05-11: massless approximation was factor 3 off at
+        # threshold (curated 0.25 pb vs OL 0.74 pb at √s=500).  Fall through
+        # to OL via eett_ew library for accurate massive-kinematics σ.
         *[_ew_ee_to_qqbar_full(q)
-          for q in ("u", "d", "c", "s", "b", "t")],
+          for q in ("u", "d", "c", "s", "b")],
         # CC Drell-Yan q_u q̄_d → ℓ⁺ν for all CKM-diagonal pairings × all
         # lepton flavours (W⁺ and W⁻ versions).  Required so the hadronic
         # enumerator finds the BW-regulated curated formula rather than
@@ -2073,18 +2575,41 @@ def _build_curated() -> None:
         # ZZ uses the numerical 8-γ trace evaluator (same as e+e-→ZZ).
         *[_ew_qqbar_to_zh(q) for q in ("u", "d", "c", "s", "b")],
         *[_ew_qqbar_to_zz(q) for q in ("u", "d", "c", "s", "b")],
-        # qq̄ → W+W- via t-channel quark exchange (Hagiwara-Peccei-Zeppenfeld).
-        # Diagonal CKM approximation.  Unblocks pp → W+W- through the
-        # generic enumerator.
-        *[_ew_qqbar_to_ww(q) for q in ("u", "d", "c", "s", "b")],
-        # ud̄ → W+γ (radiative CC Drell-Yan).
-        _ew_udbar_to_wgamma(),
+        # qq̄ → W+W-: REMOVED in v0.2.2.  The old curated formula was
+        # t-channel-only (HPZ Eq. 2.10 without s-channel γ/Z and TGC),
+        # giving ~30 % of the full SM LO.  Replaced by the full helicity-
+        # amplitude evaluator in feynman_engine.amplitudes.qqbar_ww_helicity
+        # which `total_cross_section` dispatches to directly.  Letting
+        # `get_amplitude` fall through to the OpenLoops backend gives the
+        # correct numerical |M̄|² for /api/amplitude.
+        # ud̄ → W+γ: REMOVED in v0.2.2.  Old curated formula was an explicit
+        # high-energy approximation (note: "ignoring radiation zero") that
+        # over-counted by a factor of 2-3 vs OL Born.  Falls through to OL
+        # which provides the exact LO via the ppwajj library.
         # e+e- → l+l- in EW (proper γ + Z + interference): replaces the
         # form-symbolic backend's vector-only Z approximation, which was
         # giving σ ≈ 0.7 pb at √s=200 GeV instead of ~2 pb.
-        *[_ew_ee_to_ll_neutral_current(l) for l in ("e", "mu", "tau")],
+        # NOTE: only register for different-flavor (μμ, ττ).  For same-flavor
+        # Bhabha (e+e- → e+e-) the curated formula is missing the t-channel
+        # pole entirely (σ_curated = 2.6 pb vs σ_OL = 12852 pb at √s=200);
+        # let it fall through to OL fallback or the symbolic backend.
+        *[_ew_ee_to_ll_neutral_current(l) for l in ("mu", "tau")],
         # EW decays
         _ew_z_to_ffbar(),
+        # Concrete-flavour Z → ll̄ / νν̄ / qq̄ decays (replace the "Z -> f f~"
+        # template that requires symbolic v_f / a_f at lookup time and so
+        # never matches a user's concrete-flavour query).  Total = 3 charged
+        # leptons + 3 neutrino generations + 5 quark flavours = 11 entries.
+        *[_ew_z_to_ll_per_flavor(l) for l in ("e", "mu", "tau")],
+        *[_ew_z_to_nunu(g) for g in ("e", "mu", "tau")],
+        *[_ew_z_to_qqbar_per_flavor(q) for q in ("u", "d", "c", "s", "b")],
+        # Concrete-flavour H → ℓ⁺ℓ⁻ leptonic decays (3 entries).  The "H -> f f~"
+        # template above carries a symbolic m_f and y_f that don't substitute
+        # against concrete user queries.
+        *[_ew_h_to_ll_per_flavor(l) for l in ("e", "mu", "tau")],
+        # Concrete-flavour H → q q̄ for the kinematically-open quarks (b, c).
+        # Top is off-shell (2 m_t > m_H); s/d/u Yukawas are < keV-level.
+        *[_ew_h_to_qqbar_per_flavor(q) for q in ("b", "c")],
         # All W± → ℓ± ν charge×flavor variants (6 entries) so the
         # exact-string lookup matches user requests like "W+ -> mu+ nu_mu"
         # without falling through to the form-decay backend (which spin-
@@ -2110,6 +2635,19 @@ def _build_curated() -> None:
         # QCD flavour variants
         _qcd_qiqibar_to_qjqjbar(),
         _qcd_qiqjbar_to_qiqjbar(),
+        # ─── BSM (Z′ portal + scalar dark matter) ─────────────────────────
+        # Z′ decays — vector-mediator partial widths (Pospelov-Ritz-Voloshin
+        # PLB 662 (2008) 53; Langacker RMP 81 (2009) 1199).  The BSM theory
+        # bundle has e and μ leptons; τ is excluded.
+        *[_bsm_zp_to_ll(l) for l in ("e", "mu")],
+        _bsm_zp_to_chichi(),
+        # 2→2 lepton-collider Z′ resonance (Carena-Daleo-Dobrescu-Tait
+        # PRD 70 (2004) 093009).
+        *[_bsm_ee_to_zp_to_ll(l) for l in ("mu",)],   # e+e- → e+e- has t-channel γ; off scope
+        # DM pair production (Berlin-Hooper-Krnjaic PRD 90 (2014) 015032).
+        *[_bsm_ll_to_chichi(l) for l in ("e", "mu")],
+        # DM annihilation σv (Bergstrom-Edsjö-Ullio PRL 87 (2001) 251301).
+        *[_bsm_chichi_to_ll(l) for l in ("e", "mu")],
     ]
     for result in results:
         _CURATED[(result.process, result.theory)] = result
@@ -2367,6 +2905,79 @@ def get_amplitude(process: str, theory: str = "QED") -> Optional[AmplitudeResult
             if symbolic is not None:
                 result = symbolic
         except (ValueError, NotImplementedError, KeyError):
+            pass
+
+    # 4. OpenLoops numerical fallback — covers any process for which an OL
+    #    process library is installed.  No symbolic |M|² (OL is numerical
+    #    only) but downstream σ/Γ computation still works via the OL Born
+    #    + RAMBO path.  Trust=approximate, approximation_level=
+    #    "openloops-numerical".  Added 2026-05-03 so users get answers for
+    #    processes that don't have hand-curated formulas yet.
+    if result is None:
+        try:
+            from feynman_engine.amplitudes.openloops_amplitude import (
+                get_openloops_amplitude,
+            )
+            ol_result = get_openloops_amplitude(process.strip(), theory.upper())
+            if ol_result is not None:
+                result = ol_result
+        except Exception:
+            pass
+
+    # 4b. OL OVERRIDE for massive-final-state processes where the
+    # symbolic backends (FORM, SymPy) AND leptonic/symbolic-style curated
+    # formulas use a known-bad massless approximation OR have an
+    # ~30% calibration drift vs OL at threshold.  Triggers for:
+    #   - FORM/SymPy backends with top/W/Z/H in final state
+    #   - Curated EW e+e-→tt̄ (massless approx; OL ~3× higher)
+    #   - Curated QCD q q̄ → t t̄, g g → t t̄ (Combridge massless-Mandelstam
+    #     extension to massive top — OL is exact at all √s)
+    # Does NOT override:
+    #   - QED curated (no massive final states there)
+    # When OL library NOT installed, falls through to the curated formula
+    # (which is correct in the massless limit and ~30% off near threshold).
+    # Added 2026-05-04, extended 2026-05-05 to cover QCD top processes.
+    if result is not None:
+        try:
+            outgoing = process.strip().split("->", 1)[1].split() if "->" in process else []
+            has_top = any(p in {"t", "t~"} for p in outgoing)
+            has_massive_boson = any(p in {"W+", "W-", "Z", "H", "h"} for p in outgoing)
+            symbolic_backend = result.backend in ("form-symbolic", "form-symbolic-2to3", "sympy-symbolic")
+            # Narrowed 2026-05-11: only override curated EW for processes
+            # with TOP in final state (massless approx broken).  Curated ZH,
+            # ZZ, W+W- formulas now go through HPZ (W+W-) or HZ closed-form
+            # (ZH/ZZ) and match OL within 1 %.  Don't shadow those.
+            ew_curated_with_top = (
+                result.backend == "curated"
+                and theory.upper() == "EW"
+                and has_top
+            )
+            qcd_curated_with_top = (
+                result.backend == "curated"
+                and theory.upper() == "QCD"
+                and has_top
+            )
+            if (
+                (symbolic_backend and (has_top or has_massive_boson))
+                or ew_curated_with_top
+                or qcd_curated_with_top
+            ):
+                from feynman_engine.amplitudes.openloops_amplitude import (
+                    get_openloops_amplitude,
+                )
+                ol_result = get_openloops_amplitude(process.strip(), theory.upper())
+                if ol_result is not None:
+                    # Keep the original symbolic msq + msq_latex for UI
+                    # display (and for the API's `has_msq` flag); mark the
+                    # backend as openloops so cross-section integrators
+                    # route to OL for accurate massive-kinematics σ.
+                    ol_result.msq = result.msq
+                    ol_result.msq_latex = (
+                        result.msq_latex
+                        + r"\quad\text{(OL override for massive final state — exact at threshold)}"
+                    )
+                    result = ol_result
+        except Exception:
             pass
 
     # No backend produced an amplitude.  Return None — the API layer turns
