@@ -63,6 +63,7 @@ from feynman_engine.amplitudes.pdf import (
 )
 from feynman_engine.amplitudes.hadronic import (
     hadronic_cross_section,
+    hadronic_cross_section_pdf_uncertainty,
 )
 from feynman_engine.amplitudes.differential import (
     differential_distribution,
@@ -122,6 +123,7 @@ __all__ = [
     "get_pdf",
     "parton_luminosity",
     "hadronic_cross_section",
+    "hadronic_cross_section_pdf_uncertainty",
     # Differential observables
     "differential_distribution",
     "hadronic_differential_distribution",

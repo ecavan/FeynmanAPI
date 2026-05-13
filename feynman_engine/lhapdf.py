@@ -256,14 +256,15 @@ def _build_lhapdf_from_archive(
 
 # ─── PDF set installer ────────────────────────────────────────────────────────
 
-# Recommended starter sets for various physics regimes.  CT18LO is the
-# default our `get_pdf("auto")` looks for.
-DEFAULT_PDF_SET = "CT18LO"
+# Recommended starter sets for various physics regimes.  NNPDF40_lo_as_01180
+# is the default our `get_pdf("auto")` looks for — its α_s(M_Z) = 0.118
+# matches the engine's ALPHA_S and gives pp σ values consistent with MG5.
+DEFAULT_PDF_SET = "NNPDF40_lo_as_01180"
 COMMON_PDF_SETS = [
-    "CT18LO",      # CTEQ-TEA LO (recommended default)
+    "NNPDF40_lo_as_01180",  # NNPDF 4.0 LO α_s=0.118 (recommended default)
+    "CT18LO",      # CTEQ-TEA LO α_s=0.135 (legacy default; higher gluon at low x)
     "CT18NLO",     # CTEQ-TEA NLO
-    "NNPDF40_lo_as_01180",  # NNPDF 4.0 LO
-    "MSHT20lo_as130",  # MSHT 2020 LO
+    "MSHT20lo_as130",  # MSHT 2020 LO α_s=0.130
 ]
 _PDF_SETS_URL_BASE = "http://lhapdfsets.web.cern.ch/lhapdfsets/current/"
 

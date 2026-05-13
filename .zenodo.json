@@ -1,6 +1,6 @@
 {
   "title": "FeynmanEngine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "upload_type": "software",
   "access_right": "open",
   "license": "gpl-3.0-only",
@@ -11,7 +11,7 @@
       "type": "Personal"
     }
   ],
-  "description": "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction, OpenLoops virtuals, EW Sudakov LL+NLL), differential observables, and PDF-convolved hadronic predictions.",
+  "description": "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction with K and P operators for initial-state qq̄, colour-correlated I-operator, OpenLoops virtuals, EW Sudakov LL+NLL), HPZ-style helicity amplitudes for diboson channels, fiducial cuts via 2D PDF convolution, anti-kT jet clustering, generic 1→N decay-width integrators (Dalitz + RAMBO), PDG-tabulated τ resonance modes, PDF uncertainty bands, and PDF-convolved hadronic predictions with the NNPDF4.0 LO default. Ships with an interactive setup wizard that picks OpenLoops process packs by audience (student / LHC analyst / theorist / lepton collider) or by theory (QED / QCD / EW / SM).",
   "related_identifiers": [
     {
       "identifier": "10.1103/PhysRev.76.769",
@@ -49,12 +49,12 @@
       "resource_type": "publication-article"
     },
     {
-      "identifier": "10.1140/epjc/s10052-015-3318-8",
+      "identifier": "10.1140/epjc/s10052-019-7306-2",
       "relation": "cites",
       "resource_type": "publication-article"
     },
     {
-      "identifier": "10.1140/epjc/s10052-019-7306-2",
+      "identifier": "https://arxiv.org/abs/1907.13071",
       "relation": "cites",
       "resource_type": "publication-article"
     },
@@ -79,12 +79,87 @@
       "resource_type": "publication-article"
     },
     {
+      "identifier": "10.1016/0370-2693(96)00425-X",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
       "identifier": "https://arxiv.org/abs/hep-ph/0312266",
       "relation": "cites",
       "resource_type": "publication-article"
     },
     {
       "identifier": "10.1016/0550-3213(95)00379-7",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/1612.07651",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/1610.07922",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1140/epjc/s10052-015-3318-8",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/2109.02653",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/1912.10053",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/2012.04684",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/0370-2693(77)90528-7",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/0550-3213(86)90232-4",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/0550-3213(87)90685-7",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1016/0550-3213(86)90615-2",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1103/PhysRevLett.69.3274",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/0802.1189",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1103/PhysRevD.22.971",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.1093/ptep/ptac097",
       "relation": "cites",
       "resource_type": "publication-article"
     }
@@ -101,7 +176,10 @@
     "lhapdf",
     "catani-seymour",
     "ew sudakov",
+    "hpz helicity amplitudes",
+    "anti-kt jet clustering",
     "parton distribution functions",
+    "nnpdf",
     "fastapi"
   ]
 }

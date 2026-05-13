@@ -115,6 +115,10 @@ def _M_inv(p_sum: np.ndarray) -> np.ndarray:
 # Per-particle classification used to find the leading lepton/photon
 _LEPTON_TOKENS = {"e+", "e-", "mu+", "mu-", "tau+", "tau-"}
 _PHOTON_TOKENS = {"gamma"}
+_QUARK_TOKENS  = {"u", "d", "s", "c", "b", "t", "u~", "d~", "s~", "c~", "b~", "t~"}
+_GLUON_TOKENS  = {"g"}
+_JET_TOKENS    = _QUARK_TOKENS | _GLUON_TOKENS    # jets = quarks + gluons
+_BOSON_TOKENS  = {"Z", "W+", "W-", "H"}
 
 
 def _leading_index(outgoing: list[str], targets: set[str]) -> Optional[int]:
@@ -188,7 +192,61 @@ def _obs_DR_ll(p1, p2, momenta, outgoing):
     return np.sqrt(deta ** 2 + dphi ** 2)
 
 
+def _obs_cos_theta(p1, p2, momenta, outgoing):
+    """cos θ* of the leading final-state particle relative to the +z axis.
+
+    For 2→2 this is the conventional scattering angle.  For 2→N (≥3) it is
+    the angle of the *leading-pT* outgoing particle in the CM frame.
+    """
+    # Pick the leading-pT particle as the reference
+    pTs = np.sqrt(momenta[:, :, 1] ** 2 + momenta[:, :, 2] ** 2)
+    lead_idx = np.argmax(pTs, axis=1)
+    p_lead = np.take_along_axis(momenta, lead_idx[:, None, None], axis=1).squeeze(axis=1)
+    p_mag = np.sqrt(np.sum(p_lead[:, 1:] ** 2, axis=1))
+    p_mag = np.maximum(p_mag, 1e-30)
+    return p_lead[:, 3] / p_mag
+
+
+def _obs_pT_jet(p1, p2, momenta, outgoing):
+    idx = _leading_index(outgoing, _JET_TOKENS)
+    if idx is None:
+        raise ValueError("pT_jet: no quark or gluon in final state")
+    return _pT(momenta[:, idx, :])
+
+
+def _obs_eta_jet(p1, p2, momenta, outgoing):
+    idx = _leading_index(outgoing, _JET_TOKENS)
+    if idx is None:
+        raise ValueError("eta_jet: no quark or gluon in final state")
+    return _eta(momenta[:, idx, :])
+
+
+def _obs_M_jj(p1, p2, momenta, outgoing):
+    """Dijet invariant mass — sum the two leading-pT jet particles."""
+    jet_indices = [i for i, n in enumerate(outgoing) if n in _JET_TOKENS]
+    if len(jet_indices) < 2:
+        raise ValueError(f"M_jj: needs ≥2 jets, found {len(jet_indices)}")
+    p_sum = momenta[:, jet_indices[0], :] + momenta[:, jet_indices[1], :]
+    return _M_inv(p_sum)
+
+
+def _obs_pT_boson(p1, p2, momenta, outgoing):
+    """pT of the leading W/Z/H in the final state."""
+    idx = _leading_index(outgoing, _BOSON_TOKENS)
+    if idx is None:
+        raise ValueError("pT_boson: no W/Z/H in final state")
+    return _pT(momenta[:, idx, :])
+
+
+def _obs_eta_boson(p1, p2, momenta, outgoing):
+    idx = _leading_index(outgoing, _BOSON_TOKENS)
+    if idx is None:
+        raise ValueError("eta_boson: no W/Z/H in final state")
+    return _eta(momenta[:, idx, :])
+
+
 _MC_OBSERVABLES: dict[str, tuple[Callable, str]] = {
+    "cos_theta":  (_obs_cos_theta,  "dimensionless"),
     "pT_lepton":  (_obs_pT_lepton,  "GeV"),
     "pT_photon":  (_obs_pT_photon,  "GeV"),
     "eta_lepton": (_obs_eta_lepton, "dimensionless"),
@@ -196,6 +254,13 @@ _MC_OBSERVABLES: dict[str, tuple[Callable, str]] = {
     "M_inv":      (_obs_M_inv,      "GeV"),
     "M_ll":       (_obs_M_ll,       "GeV"),
     "DR_ll":      (_obs_DR_ll,      "dimensionless"),
+    # Jet / parton observables for QCD processes
+    "pT_jet":     (_obs_pT_jet,     "GeV"),
+    "eta_jet":    (_obs_eta_jet,    "dimensionless"),
+    "M_jj":       (_obs_M_jj,       "GeV"),
+    # Boson observables for V-/H-final processes
+    "pT_boson":   (_obs_pT_boson,   "GeV"),
+    "eta_boson":  (_obs_eta_boson,  "dimensionless"),
 }
 
 
@@ -569,16 +634,27 @@ def differential_distribution(
     if not np.all(np.diff(bin_edges) > 0):
         return {"supported": False, "error": "bin_edges must be strictly increasing."}
 
-    # Special path: 2→2 cos_theta → deterministic
+    # Special path: 2→2 cos_theta → deterministic (high precision per bin).
+    # For 2→N≥3 we fall through to MC where cos_theta is interpreted as the
+    # leading-pT particle's angle relative to the beam.
     if observable == "cos_theta":
-        result = _histogram_2to2_costheta(
-            process, theory, sqrt_s, bin_edges, coupling_vals,
-        )
-        if not result.get("supported", False):
+        try:
+            from feynman_engine.physics.translator import parse_process
+            spec = parse_process(process.strip(), theory.upper())
+            n_out = len(spec.outgoing)
+        except Exception:
+            n_out = 2
+        if n_out == 2:
+            result = _histogram_2to2_costheta(
+                process, theory, sqrt_s, bin_edges, coupling_vals,
+            )
+            if not result.get("supported", False):
+                return result
+            if order.upper() == "NLO-RUNNING":
+                return _apply_running_kfactor(result, process, theory, sqrt_s)
             return result
-        if order.upper() == "NLO-RUNNING":
-            return _apply_running_kfactor(result, process, theory, sqrt_s)
-        return result
+        # Fall through to the MC path below (cos_theta now registered in
+        # _MC_OBSERVABLES; routes via _histogram_2toN_mc).
 
     # NLO-subtracted special path (only e+ e- -> mu+ mu- supported today)
     if order.upper() == "NLO-SUBTRACTED":

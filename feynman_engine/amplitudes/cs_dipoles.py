@@ -1337,17 +1337,142 @@ def pdf_counterterm_qqbar(
     )
 
 
+def _V_leg_massless(parton: PartonType, s_lk: float, mu_sq: float) -> tuple[float, float, float]:
+    """Per-leg V_i^IR coefficients for the CS I-operator (massless leg).
+
+    Returns (pole2, pole1, finite) such that the leg's contribution is
+
+        (α_s/2π) × (T_i · T_k / T_i²) × V_i(s_ik, μ²) × |B|²
+
+    Conventions follow CS NPB 485 (1997) 291 eq. (5.32-5.33) in the
+    massless limit.  For a quark/anti-quark leg, T_i² = C_F; for a gluon
+    T_i² = C_A.
+    """
+    if s_lk <= 0.0:
+        return 0.0, 0.0, 0.0
+    L = math.log(mu_sq / s_lk)
+    pole2 = 1.0
+    pole1 = L
+    # γ_i / T_i² for each parton type
+    if parton.is_quark:
+        gamma_over_T2 = GAMMA_Q / C_F     # = 3/2
+    else:
+        gamma_over_T2 = GAMMA_G / C_A
+    pole1 += gamma_over_T2
+    finite = 0.5 * L * L + gamma_over_T2 * L + (3.0 / 2.0 - PI_SQ_OVER_6 * 2.0)
+    return pole2, pole1, finite
+
+
+PI_SQ_OVER_6 = (math.pi * math.pi) / 6.0
+
+
+def i_operator_color_correlated(
+    process: str,
+    born_in_types: list[PartonType],
+    born_out_types: list[PartonType],
+    momenta_5xn,
+    s: float,
+    mu_sq: float = 91.1876 ** 2,
+) -> IOperatorIRPoles:
+    """CS I-operator for any 2→N process with coloured final state.
+
+    Uses OpenLoops' colour-correlated Born amplitude
+    ⟨B|T_i·T_k|B⟩ to assemble the I-operator pole structure leg-by-leg.
+
+    Massive legs (top quarks) get the massless-limit V_i to first
+    approximation; the (m/√s)² corrections from CS PLB 467 (1999) 399
+    Sec. 11 are <5% at √ŝ ≳ 4 m_t and are deferred to a v0.4 refinement.
+
+    Parameters
+    ----------
+    process : str
+        Engine process string, registered with OpenLoops.
+    born_in_types, born_out_types : list[PartonType]
+        The coloured parton types per leg.
+    momenta_5xn : ndarray
+        Flattened (5 × n) momentum array for the OL evaluation.
+    s : float
+        Partonic √ŝ².
+    mu_sq : float
+        Renormalisation scale².
+
+    Returns
+    -------
+    IOperatorIRPoles
+        Pole structure of (α_s/(2π)) × ⟨I⟩|B|² / |B|² (Casimirs and
+        colour correlators already included).
+    """
+    import numpy as np
+    from feynman_engine.amplitudes.openloops_bridge import (
+        evaluate_color_correlated_amplitude,
+    )
+
+    n_total = len(born_in_types) + len(born_out_types)
+    all_legs = list(born_in_types) + list(born_out_types)
+
+    tree, cc_flat = evaluate_color_correlated_amplitude(process, np.asarray(momenta_5xn))
+    if tree <= 0.0:
+        return IOperatorIRPoles(pole2=0.0, pole1=0.0, finite=0.0)
+
+    # Unpack the colour-correlator matrix.  OL returns the upper triangle
+    # in (i, k) i<k order.  ⟨B|T_i·T_k|B⟩ / |B|² = cc_flat[idx] / tree.
+    def cc_norm(i: int, k: int) -> float:
+        if i == k:
+            return 0.0
+        if i > k:
+            i, k = k, i
+        # Index of pair (i, k) in row-major upper-triangular order
+        idx = i * (2 * n_total - i - 1) // 2 + (k - i - 1)
+        if idx >= len(cc_flat):
+            return 0.0
+        return float(cc_flat[idx]) / tree
+
+    pole2_sum = 0.0
+    pole1_sum = 0.0
+    finite_sum = 0.0
+    for i, parton_i in enumerate(all_legs):
+        if not parton_i.is_coloured:
+            continue
+        T_i_sq = C_F if parton_i.is_quark else C_A
+        for k, _ in enumerate(all_legs):
+            if k == i or not all_legs[k].is_coloured:
+                continue
+            # Effective Mandelstam-like scale for the (i,k) pair: for
+            # massless legs s_ik ≈ s (since 2 p_i · p_k ~ s).  This is
+            # the high-energy approximation.
+            s_ik = s
+            p2, p1, fin = _V_leg_massless(parton_i, s_ik, mu_sq)
+            # The I-operator's per-leg piece is normalised by T_i², so:
+            #   contribution = (T_i · T_k / |B|²) × V_i
+            T_ik = cc_norm(i, k)
+            # Note T_i·T_k is sign-flipped in OL convention vs CS; the
+            # diagonal sum Σ_{k≠i} T_i·T_k = −T_i² for colour conservation,
+            # so the (-1) signs cancel in the colour-summed amplitude.
+            pole2_sum += -T_ik * p2
+            pole1_sum += -T_ik * p1
+            finite_sum += -T_ik * fin
+
+    return IOperatorIRPoles(pole2=pole2_sum, pole1=pole1_sum, finite=finite_sum)
+
+
 def i_operator_for_born(
     born_in_types: list[PartonType],
     born_out_types: list[PartonType],
     s: float,
     mu_sq: float = 91.1876 ** 2,
+    *,
+    process: Optional[str] = None,
+    momenta_5xn=None,
 ) -> IOperatorIRPoles:
     """Pick the right I-operator for a generic Born process.
 
     Currently supports:
       - q q̄ → colour-neutral final state  (Drell-Yan, ZZ via qq̄, ...)
       - g g → colour-neutral final state  (gg→H, gg→ZZ via top loop)
+      - Any process with coloured final state, if ``process`` and
+        ``momenta_5xn`` are supplied (uses OpenLoops colour correlators).
+        Massive coloured legs (top quarks) use the massless-limit V_i —
+        accurate at √ŝ ≳ 4 m for the relevant mass m.
 
     Returns IR-pole structure that should cancel OpenLoops's loop_ir1,
     loop_ir2 against the same Born |B|².
@@ -1367,9 +1492,16 @@ def i_operator_for_born(
             return i_operator_qqbar_to_color_neutral(s, mu_sq)
         if has_gluons and not has_quarks:
             return i_operator_gg_to_color_neutral(s, mu_sq)
+
+    # Coloured final-state case (e.g. pp→tt̄, pp→jj).  Needs OL colour correlators.
+    if process is not None and momenta_5xn is not None:
+        return i_operator_color_correlated(
+            process, born_in_types, born_out_types, momenta_5xn, s, mu_sq,
+        )
     raise NotImplementedError(
-        "I-operator for processes with coloured final state not yet implemented "
-        "(needs colour-correlated Born amplitudes — Phase 2.1+)."
+        "I-operator for processes with coloured final state needs colour-"
+        "correlated Born amplitudes — pass `process` and `momenta_5xn` "
+        "to use the OpenLoops colour-correlator path."
     )
 
 

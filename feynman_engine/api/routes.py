@@ -736,17 +736,17 @@ def get_cross_section(
     """
     from feynman_engine.physics.trust import classify, TrustLevel, trust_payload
 
-    # For pp processes, classify against the actual hadronic theory (auto-
-    # detect from final state) instead of the user-passed theory, which
-    # often defaults to QED for hadronic queries.
+    # For pp processes, classify against the auto-detected hadronic theory.
+    # The user-facing theory selector ("auto", "QCDQED", "EW", ...) is a hint
+    # for partonic-channel filtering, but the trust registry keys are stored
+    # against the canonical partonic theory of the final state.  Using the
+    # user's tag verbatim would erroneously block valid hadronic queries.
     process_lower = process.strip().lower()
     is_hadronic = process_lower.startswith("p p ->") or process_lower.startswith("p p->")
     if is_hadronic:
-        # Probe the hadronic registry directly; auto-detect theory if needed.
         from feynman_engine.amplitudes.hadronic import _detect_partonic_theory
         final_state = process.strip().split("->", 1)[1].strip() if "->" in process else ""
-        trust_theory = (theory.upper() if theory and theory.upper() != "QED"
-                        else _detect_partonic_theory(final_state))
+        trust_theory = _detect_partonic_theory(final_state)
     else:
         trust_theory = theory
 
@@ -780,8 +780,10 @@ def get_cross_section(
             m_ll_max=120.0,
         )
         if not result.get("supported", False):
+            # 422: input is syntactically valid but engine has no curated path
+            # for this final state.  Frontend renders the error string verbatim.
             raise HTTPException(
-                status_code=404,
+                status_code=422,
                 detail=result.get("error", f"Hadronic cross-section unavailable for '{process}'."),
             )
         result.update(trust_payload(trust_entry))
@@ -800,7 +802,7 @@ def get_cross_section(
         )
         if not result.get("supported", False):
             raise HTTPException(
-                status_code=404,
+                status_code=422,
                 detail=result.get("error", f"NLO cross-section unavailable for '{process}' in {theory}."),
             )
         result.update(trust_payload(trust_entry))
@@ -866,20 +868,10 @@ def get_cross_section(
 
     if not result.get("supported", False):
         err = result.get("error", f"Cross-section unavailable for '{process}' in {theory}.")
-        # Below-threshold and non-positive √s are kinematic input errors → 422.
-        # Missing-|M|² / unregistered process → 404 (resource not found).
-        is_kinematic_error = (
-            "below the production threshold" in err
-            or "below the W+W- threshold" in err
-            or "below the W-Z threshold" in err
-            or "below threshold" in err.lower()
-            or "must be positive" in err
-            or "must be > 0" in err
-        )
-        raise HTTPException(
-            status_code=422 if is_kinematic_error else 404,
-            detail=err,
-        )
+        # Every "supported=False" leaving this endpoint is a semantic error
+        # (input parsed cleanly, engine just can't compute it).  Use 422 across
+        # the board so the frontend's trust-block UI renders these uniformly.
+        raise HTTPException(status_code=422, detail=err)
 
     result.update(trust_payload(trust_entry))
     return result
@@ -1597,12 +1589,23 @@ def get_nlo_general(
         )
 
     # Sanity guard: physical K-factors for QCD NLO at unresolved-real cuts
-    # should fall in ~[0.7, 2.5].  If the integration returned σ_NLO < 0 or
-    # a K-factor outside [0.3, 5], the MC has not converged at this phase-
-    # space point — block the response so users don't see nonsense.
+    # should fall in ~[0.7, 2.5].  Tightened in v0.3: hard block at K ∉
+    # [0.5, 3.0] (the previous [0.3, 5.0] let through unphysical extremes
+    # from MC outliers).  K ∈ [0.5, 0.7] gets a soft warning but is still
+    # returned — partonic NLO DY at high √ŝ in MS-bar can legitimately give
+    # K ≈ 0.5-0.7 without a PDF counterterm.
     k = result.k_factor
     sigma_nlo = result.sigma_nlo_pb
-    if not math.isfinite(k) or sigma_nlo < 0.0 or k < 0.3 or k > 5.0:
+    soft_warning = None
+    if math.isfinite(k) and sigma_nlo >= 0.0 and 0.5 <= k < 0.7:
+        soft_warning = (
+            f"K = {k:.3f} is below the typical NLO QCD range (0.7-2.5).  "
+            "At very high partonic √ŝ in MS-bar the PDF counterterm "
+            "absorbs collinear logs and K can dip into the 0.5-0.7 band — "
+            "the value is *physical* but its precision is sensitive to "
+            "PDF/scale choice.  Cross-check with MCFM or a tabulated K."
+        )
+    if not math.isfinite(k) or sigma_nlo < 0.0 or k < 0.5 or k > 3.0:
         raise HTTPException(
             status_code=422,
             detail={
@@ -1633,7 +1636,7 @@ def get_nlo_general(
             },
         )
 
-    return {
+    response = {
         "process": result.process,
         "sqrt_s_gev": result.sqrt_s_gev,
         "sigma_born_pb": result.sigma_born_pb,
@@ -1650,6 +1653,11 @@ def get_nlo_general(
         "use_vegas": use_vegas,
         "alpha_s": alpha_s,
     }
+    if soft_warning is not None:
+        response["k_factor_warning"] = soft_warning
+        # Soft warning → downgrade trust level so the UI banner shows it
+        response["trust_level"] = "rough"
+    return response
 
 
 @router.get(
@@ -2059,8 +2067,42 @@ def get_hadronic_cross_section(
     ),
     pdf_member: int = Query(default=0, description="LHAPDF set member (0 = central)"),
     mu_f: Optional[float] = Query(default=None, description="Factorization scale in GeV (auto if blank)"),
+    mu_r: Optional[float] = Query(
+        default=None,
+        description=(
+            "Renormalization scale in GeV (auto if blank — μ_R = μ_F).  "
+            "α_s is evaluated at μ_R for the partonic σ̂.  Pin to the "
+            "final-state hard scale (e.g. m_t for tt̄, m_H for H, m_W for V) "
+            "to match MG5's default scale convention."
+        ),
+    ),
     m_ll_min: float = Query(default=60.0, description="Min dilepton mass in GeV (Drell-Yan only)"),
     m_ll_max: float = Query(default=120.0, description="Max dilepton mass in GeV (Drell-Yan only)"),
+    pT_l_min: float = Query(
+        default=0.0,
+        description=(
+            "Per-lepton pT cut in GeV (Drell-Yan only).  Applied analytically "
+            "via |cos θ*| restriction in the partonic CM.  Use ~10-25 GeV to "
+            "match LHC fiducial measurements."
+        ),
+    ),
+    eta_l_max: float = Query(
+        default=0.0,
+        description=(
+            "Per-lepton |η_lab| < eta_l_max cut (Drell-Yan only).  Switches "
+            "to full 2D (M_ll, y_boost) integration to apply the cut in the "
+            "lab frame.  Use ~2.4-2.5 to match ATLAS/CMS fiducial Z→ℓℓ."
+        ),
+    ),
+    eta_max: float = Query(
+        default=0.0,
+        description=(
+            "Per-particle |η_lab| < eta_max for the generic 2→2 hadronic path "
+            "(pp→γγ, pp→jj, etc.).  Combined with min_pT, applied via 2D "
+            "(M_inv, y_boost) integration.  Use ~2.5 for ATLAS/CMS photon "
+            "fiducial, ~4.5 for inclusive-jet."
+        ),
+    ),
     n_grid: int = Query(default=25, description="Grid points per channel (generic path)"),
     n_events_mc: int = Query(default=15_000, description="MC events per grid point (2→N≥3 channels)"),
     min_partonic_cm: Optional[float] = Query(
@@ -2107,17 +2149,22 @@ def get_hadronic_cross_section(
         pdf_name=pdf_name,
         pdf_member=pdf_member,
         mu_f=mu_f,
+        mu_r=mu_r,
         order=order.upper(),
         m_ll_min=m_ll_min,
         m_ll_max=m_ll_max,
+        pT_l_min=pT_l_min,
+        eta_l_max=eta_l_max,
+        eta_max=eta_max,
         n_grid=n_grid,
         n_events_mc=n_events_mc,
         min_partonic_cm=min_partonic_cm,
         min_pT=min_pT,
     )
     if not result.get("supported", False):
+        # 422 — input parsed cleanly but engine has no curated/OL path.
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=result.get("error", f"Hadronic cross-section unavailable for '{process}'."),
         )
     return result
@@ -2174,10 +2221,17 @@ def get_differential_distribution(
     proc_lower = process.strip().lower()
     is_hadronic = proc_lower.startswith("p p ->") or proc_lower.startswith("p p->")
 
-    # Trust gate: refuse blocked processes here too
+    # Trust gate: refuse blocked processes here too.  Mirror the
+    # cross-section endpoint's theory normalization for hadronic queries:
+    # auto-detect the partonic theory from the final state instead of
+    # taking the user's UI hint verbatim.
     from feynman_engine.physics.trust import classify, TrustLevel, trust_payload
-    inferred_theory = (theory.upper() if theory else
-                       ("EW" if is_hadronic else "QED"))
+    if is_hadronic:
+        from feynman_engine.amplitudes.hadronic import _detect_partonic_theory
+        final_state = process.strip().split("->", 1)[1].strip() if "->" in process else ""
+        inferred_theory = _detect_partonic_theory(final_state)
+    else:
+        inferred_theory = theory.upper() if theory else "QED"
     trust_entry = classify(process.strip(), inferred_theory, order)
     if trust_entry.trust_level == TrustLevel.BLOCKED:
         raise HTTPException(
@@ -2217,8 +2271,11 @@ def get_differential_distribution(
         )
 
     if not result.get("supported", False):
+        # 422 — input parsed cleanly but engine has no curated path for this
+        # (process, theory) combination.  Keeps semantics consistent with
+        # the cross-section endpoint.
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=result.get("error", f"Differential unavailable for '{process}'."),
         )
     result.update(trust_payload(trust_entry))

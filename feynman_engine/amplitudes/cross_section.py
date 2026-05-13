@@ -572,13 +572,33 @@ def _attach_trust(result: dict, process: str, theory: str, order: str = "LO") ->
     if not isinstance(result, dict) or not result.get("supported", True):
         return result
     try:
-        from feynman_engine.physics.trust import classify
+        from feynman_engine.physics.trust import classify, TrustLevel
         entry = classify(process.strip(), theory.upper(), order.upper())
         registry_level = entry.trust_level.value
+        # If the registry says BLOCKED, enforce it — flip supported=False and
+        # surface the block_reason / workaround.  Mirrors the /api 422 gate.
+        if entry.trust_level == TrustLevel.BLOCKED:
+            result["supported"] = False
+            result["trust_level"] = "blocked"
+            if entry.block_reason:
+                result["error"] = entry.block_reason
+                result["block_reason"] = entry.block_reason
+            if entry.workaround:
+                result["workaround"] = entry.workaround
+            if entry.reference:
+                result["trust_reference"] = entry.reference
+            if entry.install_suggestion:
+                result["install_suggestion"] = entry.install_suggestion
+            # Zero the computed σ so callers can't accidentally use it
+            result["sigma_pb"] = 0.0
+            return result
         dispatcher_level = result.get("trust_level")
+        # Only let the dispatcher downgrade trust to ROUGH or BLOCKED — those
+        # are kinematics-specific flags (e.g. eν→WZ at low √s).  An OL+RAMBO
+        # dispatcher returning the generic "approximate" should NOT override
+        # a registry "validated" claim about the underlying formula.
         if (
-            dispatcher_level
-            and dispatcher_level in _TRUST_RANK
+            dispatcher_level in ("rough", "blocked")
             and _TRUST_RANK[dispatcher_level] < _TRUST_RANK.get(registry_level, 3)
         ):
             # Dispatcher's label is more conservative — keep it and preserve
@@ -1497,7 +1517,7 @@ def _total_cross_section_openloops_fallback(
     sigma_pb = sigma_gev2 * GEV2_TO_PB
     sigma_uncertainty_pb = sigma_uncertainty_gev2 * GEV2_TO_PB
 
-    return {
+    return _attach_trust({
         "process": process,
         "theory": theory,
         "sqrt_s_gev": sqrt_s,
@@ -1516,4 +1536,4 @@ def _total_cross_section_openloops_fallback(
             f"Identical-particle factor 1/{sym_factor}! applied."
         ),
         "supported": True,
-    }
+    }, process, theory, "LO")

@@ -30,10 +30,12 @@ class KFactor:
 
 # Keys: (process, sqrt_s_TeV).  Wildcards ("*") match any energy.
 NLO_K_FACTORS: dict[tuple[str, float | str], KFactor] = {
-    # Drell-Yan: K_NLO ≈ 1.2 across LHC energies (PDG; ATLAS Z+jets)
-    ("p p -> mu+ mu-", "*"): KFactor(1.21, "PDG/ATLAS Z+jets at 13 TeV; K_NLO≈1.2"),
-    ("p p -> e+ e-",   "*"): KFactor(1.21, "Same as μ-channel (lepton universality)"),
-    ("p p -> tau+ tau-", "*"): KFactor(1.21, "Same as μ-channel"),
+    # Inclusive Drell-Yan: K_NLO QCD ≈ 1.30 at 13 TeV brings σ_LO (NNPDF40_lo)
+    # into agreement with the measured ATLAS/CMS Z→ℓℓ cross section (~1980 pb).
+    # The previous 1.21 was tuned to Z+jets-only data which has a smaller K.
+    ("p p -> mu+ mu-", "*"): KFactor(1.30, "ATLAS/CMS inclusive Z→μμ at 13 TeV; PDG"),
+    ("p p -> e+ e-",   "*"): KFactor(1.30, "Same as μ-channel (lepton universality)"),
+    ("p p -> tau+ tau-", "*"): KFactor(1.30, "Same as μ-channel"),
 
     # Top pair: K_NLO ≈ 1.6 (NLO QCD), K_NNLO ≈ 1.7 (full)
     ("p p -> t t~", "*"): KFactor(1.60, "NLO QCD (Beneke-Bonvini); 1.6 at 13 TeV"),
@@ -46,8 +48,12 @@ NLO_K_FACTORS: dict[tuple[str, float | str], KFactor] = {
     ("p p -> W+ gamma", "*"): KFactor(1.50, "NLO QCD; K≈1.5 at 13 TeV"),
     ("p p -> Z gamma",  "*"): KFactor(1.40, "NLO QCD; K≈1.4 at 13 TeV"),
 
-    # Higgs production (LHC Higgs WG YR4)
-    ("p p -> H", "*"):     KFactor(1.70, "ggF NLO QCD K (LHC HWG YR4); ≈1.7 at 13 TeV"),
+    # Higgs production (LHC Higgs WG YR4 / N3LO).
+    # ggH K-factor: NLO/LO ≈ 1.7, NNLO/LO ≈ 2.5, N3LO/LO ≈ 2.75.  Engine
+    # default is K=2.1 (NLO-ish) so σ(LO,NNPDF40_lo)*K ≈ 44 pb matches
+    # YR4 NNLO at 13 TeV.  Use this value when the consumer expects
+    # comparison against measured LHC ggH cross sections (~50 pb at 13 TeV).
+    ("p p -> H", "*"):     KFactor(2.10, "ggF NLO+NNLO blended K (LHC HWG YR4 N3LO 48.6/LO 20.8≈2.3)"),
     ("p p -> Z H", "*"):   KFactor(1.30, "ZH NLO QCD K (LHC HWG YR4)"),
     ("p p -> W+ H", "*"):  KFactor(1.30, "WH NLO QCD K (LHC HWG YR4)"),
     ("p p -> W- H", "*"):  KFactor(1.30, "WH NLO QCD K (LHC HWG YR4)"),

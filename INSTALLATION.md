@@ -45,37 +45,57 @@ sudo apt-get install -y texlive-luatex texlive-pictures texlive-science pdf2svg
 
 ```bash
 pip install feynman-engine
-feynman setup     # 10-20 min one-time
-feynman doctor    # verify all 5 native deps are 'ok'
+feynman setup     # interactive wizard (10-20 min one-time)
+feynman doctor    # verify all native deps are 'ok'
 feynman serve     # http://localhost:8000
 ```
 
-What `feynman setup` does:
+### The setup wizard
+
+`feynman setup` (no arguments) drops you into an interactive picker that asks **which OpenLoops process packs to install** based on what you're working on. Picking the right pack saves disk and build time — `everything` is ~5 GB and ~8.5 h to compile, the `student` profile is ~200 MB and ~10 min.
+
+| Profile | Packs | Best for |
+|---|---|---|
+| `student` (default) | textbook | DY, top pair, Bhabha, ee→μμ, classroom |
+| `lhc-analyst` | textbook + all-lhc-nlo | LHC NLO across Higgs/top/V+jets/di-boson |
+| `theorist` | textbook + ee-future + ew-only | Lepton colliders + EW NLO across the SM |
+| `ee-future` | textbook + ee-future | FCC-ee / ILC / muon collider |
+| `qed` / `qcd` / `ew` / `bsm` | filtered by theory | Single-theory work |
+| `qcd-ew` / `sm` | textbook + qcd-only + ew-only | Full SM (LHC + lepton colliders) |
+| `minimal` | none | Curated-only; skip OL entirely |
+| `everything` | all 222 libraries | Power users, ~5 GB, ~8.5 h |
+
+Skip the wizard by passing `--profile` directly:
+
+```bash
+feynman setup --profile lhc-analyst       # non-interactive, named profile
+feynman setup --non-interactive           # = --profile student
+feynman setup --skip-openloops            # everything except OL
+feynman setup --force                     # rebuild even if already installed
+```
+
+What `feynman setup` does in order:
 
 1. Compile QGRAF (Fortran, ~30 s)
 2. Compile FORM (C, ~1 min)
 3. Compile LoopTools (Fortran + C, ~2 min)
-4. Compile LHAPDF (C++, ~3-5 min) and download CT18LO (~10 MB)
-5. Compile OpenLoops 2 via SCons (Fortran, ~5-10 min) and download `ppllj`
+4. Compile LHAPDF (C++, ~3-5 min) and download NNPDF40_lo_as_01180 + CT18LO
+5. Compile OpenLoops 2 via SCons (Fortran, ~5-10 min) and download the OL packs for the chosen profile
 
 If a step fails, `feynman doctor` prints the exact retry command.
 
-## Skipping OpenLoops
+## Adding OL packs later
 
-If you don't need generic NLO QCD virtuals for arbitrary processes (the engine has tabulated K-factors for major LHC channels built-in), you can shave ~5-10 min off the build:
-
-```bash
-feynman setup --skip-openloops
-```
-
-OpenLoops can be added later:
+You can extend any install incrementally without rebuilding:
 
 ```bash
-feynman install-openloops
-feynman install-process ppllj
+feynman install-process pphtt        # one library (~30 MB)
+feynman install-pack lhc-higgs       # a curated bundle of libraries
 ```
 
-LHAPDF is not optional — `feynman setup` always builds it and installs CT18LO.
+`feynman list-packs` shows what's available; `feynman doctor` shows what's installed.
+
+LHAPDF is not optional — `feynman setup` always builds it and installs the default LO set.
 
 ## Verifying the install
 
@@ -91,8 +111,8 @@ FeynmanEngine doctor
   QGRAF: ok | binary=...
   FORM: ok | binary=...
   LoopTools: ok | library=...
-  LHAPDF: ok | version=6.5.5 | sets=['CT18LO']
-  OpenLoops: ok | prefix=... | processes=['ppllj']
+  LHAPDF: ok | version=6.5.5 | sets=['NNPDF40_lo_as_01180', 'CT18LO']
+  OpenLoops: ok | prefix=... | processes=['ppllj', 'pptt', 'eell_ew', 'eett_ew']
   Rendering: lualatex=ok, pdf2svg=ok
   Toolchain: gfortran=..., make=..., cc=..., c++=...
   Recommendation: native dependencies look ready.
@@ -105,8 +125,8 @@ If anything is `missing`, the `Recommendation:` line tells you the exact command
 **`gfortran: command not found`**
 On macOS, run `brew install gcc` (the Homebrew gcc package includes gfortran). On Debian/Ubuntu: `sudo apt-get install gfortran`.
 
-**`feynman setup` hangs on the OpenLoops download.**
-The `ppllj` process library is downloaded from openloops.hepforge.org during setup. Check your internet connection. To skip the download and install the library later: `feynman install-openloops --no-process`, then `feynman install-process ppllj`.
+**`feynman setup` hangs on an OpenLoops process download.**
+Process libraries are downloaded from openloops.hepforge.org during the wizard step. Check your internet connection. To skip OL entirely and install packs later: `feynman setup --skip-openloops`, then `feynman install-pack textbook` (or any other pack).
 
 **`feynman doctor` reports `LoopTools: missing` but `gfortran` is installed.**
 LoopTools needs both gfortran and make. On macOS, Apple's `gcc` is actually clang and has no Fortran. Install Homebrew gcc: `brew install gcc`.

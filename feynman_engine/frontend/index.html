@@ -464,6 +464,9 @@
         <button class="tab-btn" data-tab="distributions" role="tab" aria-selected="false">
           Distributions
         </button>
+        <button class="tab-btn" data-tab="hadronic" role="tab" aria-selected="false">
+          Hadronic σ(pp)
+        </button>
       </nav>
 
       <!-- ── Tab: Diagrams & Amplitude ──────────────────────────────── -->
@@ -505,15 +508,27 @@
           </div>
           <div class="hist-controls">
             <label>Observable
+              <!-- Options filtered by app.js based on the selected process's
+                   final state (leptons, photons, jets, bosons).  See
+                   `filterObservables()` in app.js. -->
               <select id="obs-select">
-                <option value="cos_theta">cos θ (2→2)</option>
-                <option value="pT_lepton">pT of leading lepton (GeV)</option>
-                <option value="pT_photon">pT of leading photon (GeV)</option>
-                <option value="eta_lepton">η of leading lepton</option>
-                <option value="y_lepton">y of leading lepton</option>
-                <option value="M_inv">M_inv of final state (GeV)</option>
-                <option value="M_ll">M_ll dilepton (GeV)</option>
-                <option value="DR_ll">ΔR_ll</option>
+                <option value="cos_theta" data-needs="any">cos θ (scattering angle)</option>
+                <option value="M_inv" data-needs="any">M_inv (full final state, GeV)</option>
+                <!-- Lepton observables -->
+                <option value="pT_lepton" data-needs="lepton">pT of leading lepton (GeV)</option>
+                <option value="eta_lepton" data-needs="lepton">η of leading lepton</option>
+                <option value="y_lepton" data-needs="lepton">y of leading lepton</option>
+                <option value="M_ll" data-needs="dilepton">M_ll dilepton (GeV)</option>
+                <option value="DR_ll" data-needs="dilepton">ΔR_ll</option>
+                <!-- Photon observables -->
+                <option value="pT_photon" data-needs="photon">pT of leading photon (GeV)</option>
+                <!-- Jet observables (quark/gluon final states) -->
+                <option value="pT_jet" data-needs="jet">pT of leading jet (GeV)</option>
+                <option value="eta_jet" data-needs="jet">η of leading jet</option>
+                <option value="M_jj" data-needs="dijet">M_jj dijet (GeV)</option>
+                <!-- Boson observables -->
+                <option value="pT_boson" data-needs="boson">pT of leading V/H (GeV)</option>
+                <option value="eta_boson" data-needs="boson">η of leading V/H</option>
               </select>
             </label>
             <label>√s (GeV)
@@ -549,6 +564,80 @@
             <svg id="hist-svg" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet"></svg>
             <div id="hist-summary" class="hist-summary"></div>
           </div>
+        </section>
+      </div>
+
+      <!-- ── Tab: Hadronic (pp) cross-section ───────────────────────── -->
+      <div id="tab-hadronic" class="tab-panel hidden" role="tabpanel">
+        <section class="amplitude-panel">
+          <div class="distrib-header">
+            <h3>Hadronic cross-section σ(pp → X)</h3>
+            <p class="histogram-note">
+              Convolve the partonic σ̂ with a parton-distribution function to obtain
+              the proton-proton cross-section at LHC energies.  Defaults: PDF
+              <strong>NNPDF40_lo_as_01180</strong> (α_s(M_Z)=0.118), μ_F and μ_R
+              automatic per process.  Switch PDFs or scales to study systematics.
+            </p>
+          </div>
+          <div class="hist-controls">
+            <label>process
+              <input type="text" id="hp-process" value="p p -> t t~" size="22"
+                     title="e.g. 'p p -> t t~', 'p p -> Z H', 'p p -> mu+ mu-'" />
+            </label>
+            <label>√s (GeV)
+              <input type="number" id="hp-sqrts" value="13000" step="100" min="100" />
+            </label>
+            <label>theory
+              <select id="hp-theory">
+                <option value="">auto</option>
+                <option value="QCD">QCD</option>
+                <option value="QCDQED">QCD+QED</option>
+                <option value="EW">EW</option>
+                <option value="QED">QED</option>
+              </select>
+            </label>
+            <label>order
+              <select id="hp-order">
+                <option value="LO" selected>LO</option>
+                <option value="NLO">NLO (tabulated K)</option>
+              </select>
+            </label>
+            <label>PDF
+              <select id="hp-pdf">
+                <option value="auto" selected>auto (NNPDF40_lo)</option>
+                <option value="CT18LO">CT18LO (α_s=0.135)</option>
+                <option value="NNPDF40_lo_as_01180">NNPDF40_lo (α_s=0.118)</option>
+                <option value="LO-simple">built-in LO (offline)</option>
+              </select>
+            </label>
+            <label>μ_F (GeV)
+              <input type="number" id="hp-muf" value="" step="1" min="0" placeholder="auto"
+                     title="Factorization scale.  Defaults to m_t for tt̄, m_H for H, M_Z for DY." />
+            </label>
+            <label>μ_R (GeV)
+              <input type="number" id="hp-mur" value="" step="1" min="0" placeholder="auto"
+                     title="Renormalization scale.  Defaults to μ_F when blank." />
+            </label>
+            <label>M_ll min (GeV)
+              <input type="number" id="hp-mllmin" value="60" step="1" min="0"
+                     title="Drell-Yan only: dilepton mass window minimum." />
+            </label>
+            <label>M_ll max (GeV)
+              <input type="number" id="hp-mllmax" value="120" step="1" min="0"
+                     title="Drell-Yan only: dilepton mass window maximum." />
+            </label>
+            <label>pT_l min (GeV)
+              <input type="number" id="hp-ptlmin" value="0" step="5" min="0"
+                     title="Drell-Yan only: per-lepton pT cut (fiducial).  LHC defaults: 25 GeV." />
+            </label>
+            <label>min pT (GeV)
+              <input type="number" id="hp-minpt" value="0" step="5" min="0"
+                     title="Per-particle pT cut for IR-divergent processes (γγ, jj)." />
+            </label>
+            <button id="hp-compute-btn" class="btn-primary">Compute σ(pp)</button>
+          </div>
+          <div id="hp-status" class="hist-status"></div>
+          <div id="hp-result" class="hist-summary"></div>
         </section>
       </div>
 

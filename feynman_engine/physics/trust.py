@@ -79,17 +79,56 @@ def _add(process: str, theory: str, order: str, entry: TrustEntry) -> None:
 # VALIDATED — within ~5% of analytic / published references
 # ────────────────────────────────────────────────────────────────────────────
 
-# QED 2→2 (textbook formulas, exact)
+# QED 2→2 — pure-s-channel textbook formulas (no t-channel singularities,
+# integration-limit-independent).
 for proc in [
-    "e+ e- -> mu+ mu-", "e+ e- -> e+ e-", "e- gamma -> e- gamma",
-    "e+ e- -> gamma gamma", "gamma gamma -> e+ e-",
-    "mu+ mu- -> gamma gamma", "mu+ mu- -> e+ e-", "mu+ mu- -> mu+ mu-",
-    "e+ e- -> tau+ tau-", "tau+ tau- -> mu+ mu-", "tau+ tau- -> e+ e-",
-    "e- mu- -> e- mu-", "e+ mu- -> e+ mu-", "e- e- -> e- e-",
+    "e+ e- -> mu+ mu-", "e+ e- -> tau+ tau-",
+    "mu+ mu- -> e+ e-", "tau+ tau- -> mu+ mu-", "tau+ tau- -> e+ e-",
+    "gamma gamma -> e+ e-",
+    "e- mu- -> e- mu-", "e+ mu- -> e+ mu-",  # u-channel only
 ]:
     _add(proc, "QED", "LO", TrustEntry(
         TrustLevel.VALIDATED,
         reference="textbook (P&S, Schwartz)",
+    ))
+
+# QED 2→2 with t-channel γ pole (Bhabha, Møller, fermion+fermion→γγ).
+# The engine integrates cos θ ∈ [-0.999, +0.999] with no fiducial cuts,
+# so σ is integration-limit-dependent and differs from MG5 (which applies
+# default photon/lepton pT and angular cuts).  Benchmarked vs MG5 v3.7.1:
+#   e+e- → e+e- @ 91 GeV : engine 1.7e5 vs MG5 4.7e3
+#   e+e- → e+e- @ 200 GeV: engine 1.3e4 vs MG5 9.6e2
+#   e+e- → e+e- @ 500 GeV: engine 2.0e3 vs MG5 1.6e2
+#   e-e- → e-e- @ 200 GeV: engine 1.3e4 vs MG5 1.1e3
+#   μ+μ- → μ+μ- @ 200 GeV: engine 1.3e4 vs MG5 9.6e2
+#   e+e- → γγ   @ 200 GeV: engine 21.5  vs MG5 14.0
+#   μ+μ- → γγ   @ 200 GeV: engine 21.5  vs MG5 14.0
+# Use ``differential_distribution()`` with explicit cos θ window for a
+# well-defined value, or pass fiducial cuts (when supported).
+for proc in [
+    "e+ e- -> e+ e-",       # Bhabha
+    "mu+ mu- -> mu+ mu-",   # μ-Bhabha
+    "e- e- -> e- e-",       # Møller
+    "e+ e- -> gamma gamma",
+    "mu+ mu- -> gamma gamma",
+    "e- gamma -> e- gamma", # Compton
+]:
+    _add(proc, "QED", "LO", TrustEntry(
+        TrustLevel.APPROXIMATE,
+        reference=(
+            "Textbook formula (P&S, Schwartz) integrated cos θ ∈ "
+            "[-0.999, +0.999] with no fiducial cuts. Benchmarked vs "
+            "MG5 v3.7.1 at √s = 91-500 GeV — engine grossly above MG5 "
+            "due to t-channel γ pole / photon collinear singularity."
+        ),
+        accuracy_caveat=(
+            "**Integration-limit-dependent**: engine integrates cos θ ∈ "
+            "[-0.999, 0.999] including the t-channel/collinear singularity. "
+            "MG5 default uses photon pT > 10 GeV and lepton angular cuts, "
+            "giving 1-2 orders of magnitude smaller σ.  For a well-defined "
+            "σ matching experiment, use `differential_distribution()` with "
+            "an explicit cos θ or pT window."
+        ),
     ))
 
 # QCD 2→2 (Combridge, verified vs PYTHIA8)
@@ -215,16 +254,17 @@ _add("p p -> tau+ tau-", "EW", "LO", TrustEntry(
 ))
 _add("p p -> t t~", "QCD", "LO", TrustEntry(
     TrustLevel.APPROXIMATE,
-    reference="LHC LO ~830 pb at 13 TeV (PDG); engine 1867 pb with CT18LO + α_s scaling.",
+    reference="LHC LO ~830 pb at 13 TeV (PDG); engine ~1330 pb with NNPDF40_lo_as_01180.",
     accuracy_caveat=(
-        "Engine returns 1867 pb at 13 TeV with CT18LO and PDF-consistent α_s "
-        "scaling.  MG5 default (NN23LO1, α_s=0.119) gives 504 pb.  The 3.7× "
-        "difference is the PDF systematic: CT18LO has a much higher gluon "
-        "luminosity at low x than NN23LO1 (CT18LO is specifically tuned for "
-        "LO usage with α_s=0.135).  This is NOT a calibration bug — the "
-        "engine's partonic σ̂ is the textbook Combridge formula.  For LHC "
-        "applications use CT18LO (engine default) or install NN23LO1 via "
-        "`feynman install-pdf-set NNPDF23_lo_as_0119`."
+        "Engine returns ~1330 pb at 13 TeV with the default LO PDF "
+        "NNPDF40_lo_as_01180 (α_s=0.118).  MG5 default (NN23LO1, α_s=0.130) "
+        "gives 504 pb.  The 2.6× difference is the modern-vs-legacy LO PDF "
+        "systematic: NNPDF40_lo has higher gluon luminosity at the LHC than "
+        "NN23LO1 because the NNPDF40 fit includes recent LHC top-pair data "
+        "preferring higher g(x>0.1).  This is NOT a calibration bug — the "
+        "engine's partonic σ̂ is the textbook Combridge formula.  To match "
+        "MG5 LO, pass `pdf_name='NNPDF23_lo_as_0130'` after installing it via "
+        "`feynman install-pdf-set NNPDF23_lo_as_0130`."
     ),
 ))
 _add("p p -> Z Z", "EW", "LO", TrustEntry(

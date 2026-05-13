@@ -265,3 +265,118 @@ def three_body_fermi_width(process: str) -> Optional[dict]:
         "label":             cls["label"],
         "supported":         True,
     }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Tau hadronic resonance modes (#3b)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Sargent gives Σ Γ(τ → q q̄' ν) = (V_ud² + V_us²) × Γ(τ→eν̄ν) × N_c.  This
+# captures the inclusive "high-M_qq̄" hadronic decay but misses the low-mass
+# resonance dominated channels (τ → ρ ν, τ → π ν, τ → K ν, ...) which
+# contribute ~11% of the total τ width.
+#
+# PDG 2024 (Particle Listings, τ):
+#   BR(τ → π⁻ ν_τ)          = (10.82 ± 0.05)%
+#   BR(τ → K⁻ ν_τ)          = ( 0.696 ± 0.010)%
+#   BR(τ → π⁻ π⁰ ν_τ)       = (25.49 ± 0.09)%   ← dominated by ρ(770)
+#   BR(τ → K⁻ π⁰ ν_τ)       = ( 0.433 ± 0.015)%  ← dominated by K*(892)
+#   BR(τ → π⁻ K⁰ ν_τ)       = ( 0.840 ± 0.014)%
+#   BR(τ → 3π ν_τ)           = ( 9.31 ± 0.05)%
+#   BR(τ → eν̄ν)              = (17.82 ± 0.04)%
+#   BR(τ → μν̄ν)              = (17.39 ± 0.04)%
+#   BR(τ → q q̄' ν, inclusive) ≈ 64.79% (sum of all hadronic)
+#
+# τ total width Γ_τ = ℏ / τ_τ = 6.582e-25 / 2.903e-13 s = 2.267e-12 GeV.
+# Sargent inclusive prediction Σ Γ(τ→qq̄'ν) = (0.97435² + 0.225²) × Γ_e × 3
+#   ≈ 1.0007 × 4.04e-13 × 3 = 1.213e-12 GeV
+#   = BR ~53.5% of Γ_τ.  The PDG inclusive BR is 64.8%, so Sargent
+#   under-predicts by ~11 percentage points (the gap is the resonance
+#   contribution).
+
+# Tabulated PDG 2024 partial widths (GeV) — these are *experimental*, used to
+# provide accurate Γ for resonance modes that the perturbative quark-level
+# Sargent calculation can't compute from first principles (low-Q² QCD).
+_TAU_RESONANCE_BR_PDG24 = {
+    "tau- -> pi- nu_tau":            0.1082,
+    "tau- -> K- nu_tau":             0.00696,
+    "tau- -> pi- pi0 nu_tau":        0.2549,   # ρ(770) dominant
+    "tau- -> K- pi0 nu_tau":         0.00433,  # K*(892)
+    "tau- -> pi- K0 nu_tau":         0.00840,
+    "tau- -> pi- pi+ pi- nu_tau":    0.0931,
+    "tau- -> pi- pi0 pi0 nu_tau":    0.0918,
+    "tau- -> K- K+ pi- nu_tau":      0.00144,
+}
+_TAU_TOTAL_WIDTH_GEV = 6.582119569e-25 / 2.903e-13   # ≈ 2.268e-12 GeV
+_TAU_TOTAL_BR_HADRONIC = 0.6479                       # PDG 2024
+_TAU_BR_LEPTONIC_EACH = 0.1782                        # PDG 2024 (eν̄ν or μν̄ν)
+
+
+def tau_resonance_width(process: str) -> Optional[dict]:
+    """PDG-tabulated partial width for a τ resonance/hadronic decay channel.
+
+    Sargent can't predict ρ, K*, multi-pion resonance modes from first
+    principles (low-Q² QCD non-perturbative).  This function looks up the
+    PDG-measured branching ratios and returns Γ_partial = BR × Γ_τ.
+
+    Parameters
+    ----------
+    process : str
+        e.g. ``"tau- -> pi- nu_tau"``, ``"tau- -> pi- pi0 nu_tau"``.
+
+    Returns
+    -------
+    dict with ``width_gev``, ``BR``, ``method='pdg-tabulated'``,
+    ``trust_level='validated'``, or None if the channel isn't tabulated.
+    """
+    proc = process.strip()
+    if proc not in _TAU_RESONANCE_BR_PDG24:
+        return None
+    br = _TAU_RESONANCE_BR_PDG24[proc]
+    return {
+        "process":     proc,
+        "width_gev":   br * _TAU_TOTAL_WIDTH_GEV,
+        "width_mev":   br * _TAU_TOTAL_WIDTH_GEV * 1000.0,
+        "BR":          br,
+        "method":      "pdg-tabulated",
+        "kind":        "tau-resonance",
+        "trust_level": "validated",
+        "reference":   "PDG 2024 Particle Listings, τ section.",
+        "label":       proc,
+        "supported":   True,
+    }
+
+
+def tau_branching_summary() -> dict:
+    """Inventory of all known τ decay modes and their BR contributions.
+
+    Compares the Sargent-perturbative inclusive estimate against the PDG
+    sum of resonance + multi-meson channels to expose the ~11% gap.
+    """
+    # Sargent inclusive prediction Γ(τ→qq̄'ν) — sum of u-d~ and u-s~ channels
+    r_ud = three_body_fermi_width("tau- -> d u~ nu_tau")
+    r_us = three_body_fermi_width("tau- -> s u~ nu_tau")
+    sargent_inclusive_gev = 0.0
+    if r_ud and r_ud.get("supported"):
+        sargent_inclusive_gev += r_ud["width_gev"]
+    if r_us and r_us.get("supported"):
+        sargent_inclusive_gev += r_us["width_gev"]
+    sargent_br = sargent_inclusive_gev / _TAU_TOTAL_WIDTH_GEV
+
+    pdg_resonance_br = sum(_TAU_RESONANCE_BR_PDG24.values())
+
+    return {
+        "sargent_inclusive_BR":  sargent_br,
+        "sargent_inclusive_width_gev": sargent_inclusive_gev,
+        "pdg_tabulated_resonance_BR": pdg_resonance_br,
+        "pdg_total_hadronic_BR": _TAU_TOTAL_BR_HADRONIC,
+        "leptonic_BR_each":      _TAU_BR_LEPTONIC_EACH,
+        "tau_total_width_gev":   _TAU_TOTAL_WIDTH_GEV,
+        "note": (
+            "Sargent gives the inclusive perturbative-quark estimate.  "
+            "PDG resonance BRs sum to the dominant exclusive channels.  "
+            "The gap between Sargent inclusive (~53.5%) and PDG total "
+            "hadronic (64.79%) is the ~11% resonance enhancement at "
+            "low Q² that perturbative QCD can't reach."
+        ),
+    }

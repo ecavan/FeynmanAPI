@@ -210,10 +210,11 @@ RUN chmod +x ./bin/form
 # vars needed.  Also probe /tmp/lhapdf-install (legacy/dev location).
 COPY --from=lhapdf-builder /opt/lhapdf /opt/lhapdf
 
-# Drop in the OpenLoops install + default ppllj process library from the
-# builder stage.  feynman_engine.amplitudes.openloops_bridge auto-discovers
-# /opt/openloops at import.  We need libgfortran5 (already installed above)
-# for the Fortran shared libraries to load.
+# Drop in the OpenLoops install + bundled textbook + lhc + ee-future process
+# libraries (ppllj, pptt, pph, eell_ew, eella_ew) from the builder stage.
+# feynman_engine.amplitudes.openloops_bridge auto-discovers /opt/openloops at
+# import.  We need libgfortran5 (already installed above) for the Fortran
+# shared libraries to load.
 COPY --from=openloops-builder /opt/openloops /opt/openloops
 
 ENV LHAPDF_DATA_PATH=/opt/lhapdf/share/LHAPDF \

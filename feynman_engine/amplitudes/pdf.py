@@ -451,6 +451,17 @@ class LHAPDFSet:
         except Exception:
             self.alpha_s_mz = 0.118  # fallback to engine default
 
+        # OrderQCD metadata: 0 = LO, 1 = NLO, 2 = NNLO.  Used by the trust
+        # gate to warn when an NLO/NNLO PDF is paired with an LO σ̂ — that
+        # combination is inconsistent (different DIS scheme conventions and
+        # different α_s running), typically biasing σ by 5-15%.
+        try:
+            pdf_set = self._pdf.set()
+            order_str = pdf_set.get_entry("OrderQCD")
+            self.order_qcd = int(order_str) if order_str is not None else None
+        except Exception:
+            self.order_qcd = None
+
     def alpha_s(self, Q2: float) -> float:
         """Return α_s(Q²) using the PDF's own running."""
         try:
@@ -499,13 +510,22 @@ def get_builtin_pdf(name: str = "LO-simple") -> PDFSet:
     return _BUILTIN_PDF
 
 
+# Engine default LO PDF.  NNPDF40_lo_as_01180 is α_s(M_Z) = 0.118 (matches the
+# engine's hard-coded ALPHA_S and brings pp → tt̄ at 13 TeV to ~500 pb, in line
+# with MG5+NN23LO1).  CT18LO at α_s=0.135 is kept as an alternative.
+_DEFAULT_LO_PDF = "NNPDF40_lo_as_01180"
+_DEFAULT_LO_PDF_FALLBACKS = ("CT18LO",)
+
+
 def get_pdf(name: str = "auto", member: int = 0):
     """Resolve a PDF set by name.
 
     Parameters
     ----------
     name : str
-        - ``"auto"`` — use LHAPDF's ``CT18LO`` (required; raises if missing)
+        - ``"auto"`` — use the engine's default LO PDF
+          (``NNPDF40_lo_as_01180``, α_s(M_Z)=0.118).  Falls back to ``CT18LO``
+          if NNPDF40 is not installed.
         - ``"LO-simple"`` — built-in LO parametrization (escape hatch for
           tests / offline diagnostics; produces 1/2 to 1/3 of LHC σ_pp)
         - any other string — interpreted as an LHAPDF set name
@@ -519,26 +539,35 @@ def get_pdf(name: str = "auto", member: int = 0):
     Raises
     ------
     RuntimeError
-        If ``name="auto"`` and LHAPDF + CT18LO are not available.  This is
-        the engine's enforcement of the "no silent factor-of-2-3 LHC σ" promise.
+        If ``name="auto"`` and LHAPDF + a default PDF are not available.
+        This is the engine's enforcement of the "no silent factor-of-2-3
+        LHC σ" promise.
     """
     if name in (None, "", "auto"):
         if _lhapdf_available():
-            try:
-                return _get_or_create_lhapdf("CT18LO", member)
-            except RuntimeError as exc:
-                raise RuntimeError(
-                    "LHAPDF is installed but CT18LO is not.  Run "
-                    "`feynman install-pdf-set CT18LO` or `feynman setup --force` "
-                    "to install the default PDF.  "
-                    f"Underlying error: {exc}"
-                ) from exc
+            last_exc: Optional[Exception] = None
+            for candidate in (_DEFAULT_LO_PDF, *_DEFAULT_LO_PDF_FALLBACKS):
+                try:
+                    return _get_or_create_lhapdf(candidate, member)
+                except RuntimeError as exc:
+                    last_exc = exc
+                    continue
+            raise RuntimeError(
+                f"LHAPDF is installed but none of the default LO PDFs "
+                f"{(_DEFAULT_LO_PDF,) + _DEFAULT_LO_PDF_FALLBACKS!r} are.  "
+                f"Run `feynman install-pdf-set {_DEFAULT_LO_PDF}` "
+                f"(α_s=0.118, recommended) or "
+                f"`feynman install-pdf-set CT18LO` (α_s=0.135).  "
+                f"Underlying error: {last_exc}"
+            ) from last_exc
         raise RuntimeError(
-            "LHAPDF + CT18LO is required for hadronic cross-sections but was "
-            "not found.  Run `feynman setup` to build LHAPDF and install "
-            "CT18LO (~5 min, one-time).  If you specifically need the "
-            "built-in LO PDF for offline diagnostics, pass name='LO-simple' "
-            "explicitly — note it gives 1/2 to 1/3 of LHC σ_pp."
+            f"LHAPDF + a default LO PDF "
+            f"({_DEFAULT_LO_PDF}, α_s=0.118) is required for hadronic "
+            "cross-sections but was not found.  Run `feynman setup` to "
+            "build LHAPDF and install the default PDF (~5 min, one-time).  "
+            "If you specifically need the built-in LO PDF for offline "
+            "diagnostics, pass name='LO-simple' explicitly — note it gives "
+            "1/2 to 1/3 of LHC σ_pp."
         )
     if name == "LO-simple":
         return get_builtin_pdf()

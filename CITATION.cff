@@ -9,7 +9,7 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.19964300"
     description: "Concept DOI for this version of FeynmanEngine"
-abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction, OpenLoops virtuals, EW Sudakov LL+NLL), differential observables, and PDF-convolved hadronic predictions."
+abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction with K and P operators for initial-state qq̄, colour-correlated I-operator, OpenLoops virtuals, EW Sudakov LL+NLL), HPZ-style helicity amplitudes for diboson channels, fiducial cuts (pT_l_min, eta_l_max) via 2D PDF convolution, anti-k_T jet clustering, generic 1→N decay-width integrators (Dalitz + RAMBO), PDG-tabulated τ resonance modes, PDF uncertainty bands, and PDF-convolved hadronic predictions with the NNPDF4.0 LO default."
 authors:
   - family-names: "Cavan"
     given-names: "Elijah"
@@ -278,3 +278,260 @@ references:
     year: 2015
     doi: "10.1140/epjc/s10052-015-3318-8"
     url: "https://doi.org/10.1140/epjc/s10052-015-3318-8"
+  - type: article
+    title: "The path to proton structure at 1% accuracy"
+    authors:
+      - family-names: "Ball"
+        given-names: "R. D."
+      - name: "NNPDF Collaboration"
+    journal: "European Physical Journal C"
+    volume: 82
+    start: 428
+    year: 2022
+    url: "https://arxiv.org/abs/2109.02653"
+    notes: "NNPDF 4.0 parton distributions; engine default LO set is NNPDF40_lo_as_01180."
+  - type: article
+    title: "New CTEQ global analysis of quantum chromodynamics with high-precision data from the LHC"
+    authors:
+      - family-names: "Hou"
+        given-names: "T.-J."
+      - family-names: "Yan"
+        given-names: "J."
+      - family-names: "Gao"
+        given-names: "J."
+      - family-names: "Dulat"
+        given-names: "S."
+      - family-names: "Hobbs"
+        given-names: "T. J."
+      - family-names: "Huston"
+        given-names: "J."
+      - family-names: "Nadolsky"
+        given-names: "P."
+      - family-names: "Pumplin"
+        given-names: "J."
+      - family-names: "Schmidt"
+        given-names: "C."
+      - family-names: "Sitiwaldi"
+        given-names: "I."
+      - family-names: "Stump"
+        given-names: "D."
+      - family-names: "Yuan"
+        given-names: "C.-P."
+    journal: "Physical Review D"
+    volume: 103
+    issue: 1
+    start: 014013
+    year: 2021
+    url: "https://arxiv.org/abs/1912.10053"
+    notes: "CT18 PDFs; engine alternative LO set is CT18LO."
+  - type: article
+    title: "Parton distributions from LHC, HERA, Tevatron and fixed target data: MSHT20 PDFs"
+    authors:
+      - family-names: "Bailey"
+        given-names: "S."
+      - family-names: "Cridge"
+        given-names: "T."
+      - family-names: "Harland-Lang"
+        given-names: "L. A."
+      - family-names: "Martin"
+        given-names: "A. D."
+      - family-names: "Thorne"
+        given-names: "R. S."
+    journal: "European Physical Journal C"
+    volume: 81
+    start: 341
+    year: 2021
+    url: "https://arxiv.org/abs/2012.04684"
+    notes: "MSHT20 PDFs; alternative Hessian set for systematics."
+  - type: article
+    title: "Hadron production at large transverse momentum and QCD"
+    authors:
+      - family-names: "Combridge"
+        given-names: "J. F."
+      - family-names: "Kripfganz"
+        given-names: "J."
+      - family-names: "Ranft"
+        given-names: "J."
+    journal: "Physics Letters B"
+    volume: 70
+    issue: 2
+    start: 234
+    end: 238
+    year: 1977
+    doi: "10.1016/0370-2693(77)90528-7"
+    notes: "Source of curated QCD 2→2 partonic |M|² formulas (qq, qg, gg, qq~→qq~, qq~→gg, etc.)"
+  - type: article
+    title: "QCD radiative corrections to parton-parton scattering"
+    authors:
+      - family-names: "Ellis"
+        given-names: "R. K."
+      - family-names: "Sexton"
+        given-names: "J. C."
+    journal: "Nuclear Physics B"
+    volume: 269
+    issue: 2
+    start: 445
+    end: 484
+    year: 1986
+    doi: "10.1016/0550-3213(86)90232-4"
+    notes: "Massive-top NLO QCD; basis for engine's pp→tt̄ K=1.6 (LHC HWG calibration)."
+  - type: article
+    title: "Probing the weak boson sector in e+e- → W+W-"
+    authors:
+      - family-names: "Hagiwara"
+        given-names: "K."
+      - family-names: "Peccei"
+        given-names: "R. D."
+      - family-names: "Zeppenfeld"
+        given-names: "D."
+      - family-names: "Hikasa"
+        given-names: "K."
+    journal: "Nuclear Physics B"
+    volume: 282
+    start: 253
+    end: 307
+    year: 1987
+    doi: "10.1016/0550-3213(87)90685-7"
+    notes: "Helicity-amplitude framework used by the engine's ee→WW, qq~→WW, eν→WZ evaluators."
+  - type: article
+    title: "Radiative corrections to e+e- → ZZ"
+    authors:
+      - family-names: "Beenakker"
+        given-names: "W."
+      - family-names: "Berends"
+        given-names: "F. A."
+      - family-names: "Chapovsky"
+        given-names: "A. P."
+    journal: "European Physical Journal C"
+    volume: 8
+    start: 525
+    end: 557
+    year: 1999
+    notes: "Reference for engine ee→ZZ helicity-amplitude evaluator."
+  - type: article
+    title: "Helicity amplitudes for heavy lepton production in e+e- annihilation"
+    authors:
+      - family-names: "Hagiwara"
+        given-names: "K."
+      - family-names: "Zeppenfeld"
+        given-names: "D."
+    journal: "Nuclear Physics B"
+    volume: 274
+    start: 1
+    end: 32
+    year: 1986
+    doi: "10.1016/0550-3213(86)90615-2"
+    notes: "Closed-form template used by ee→ZH (Higgsstrahlung) and ee→tt̄ massive."
+  - type: article
+    title: "The dipole formalism for the calculation of QCD jet cross sections at next-to-leading order"
+    authors:
+      - family-names: "Catani"
+        given-names: "S."
+      - family-names: "Seymour"
+        given-names: "M. H."
+    journal: "Physics Letters B"
+    volume: 378
+    issue: "1-4"
+    start: 287
+    end: 301
+    year: 1996
+    doi: "10.1016/0370-2693(96)00425-X"
+    notes: "Original CS dipole paper; the K and P operators (engine's cs_kp_operators.py) come from this paper's eq. 6.55-6.61 (typo-corrected in PLB 467 (1999) 399)."
+  - type: article
+    title: "Structure-function approach to vector-boson scattering in pp collisions"
+    authors:
+      - family-names: "Han"
+        given-names: "T."
+      - family-names: "Valencia"
+        given-names: "G."
+      - family-names: "Willenbrock"
+        given-names: "S."
+    journal: "Physical Review Letters"
+    volume: 69
+    start: 3274
+    end: 3277
+    year: 1992
+    doi: "10.1103/PhysRevLett.69.3274"
+    notes: "VBF Higgs (pp→Hjj) framework; engine's pp→H+2j is calibrated to YR4 anchored on this formalism."
+  - type: article
+    title: "The anti-k_T jet clustering algorithm"
+    authors:
+      - family-names: "Cacciari"
+        given-names: "M."
+      - family-names: "Salam"
+        given-names: "G. P."
+      - family-names: "Soyez"
+        given-names: "G."
+    journal: "Journal of High Energy Physics"
+    volume: "04"
+    start: 063
+    year: 2008
+    url: "https://arxiv.org/abs/0802.1189"
+    notes: "Anti-k_T jet algorithm; engine's jet_clustering.py is a pure-Python implementation."
+  - type: article
+    title: "Electroweak radiative corrections at high energies"
+    authors:
+      - family-names: "Pozzorini"
+        given-names: "S."
+    journal: "Physical Review D"
+    volume: 71
+    start: 053002
+    year: 2005
+    notes: "EW Sudakov LL+NLL framework used by the generic-EW NLO module."
+  - type: article
+    title: "Radiative corrections in the SU(2)_L × U(1) theory: a simple renormalization framework"
+    authors:
+      - family-names: "Sirlin"
+        given-names: "A."
+    journal: "Physical Review D"
+    volume: 22
+    issue: 4
+    start: 971
+    end: 981
+    year: 1980
+    doi: "10.1103/PhysRevD.22.971"
+    notes: "Sargent-Cabibbo radiative-correction baseline for μ/τ decay widths."
+  - type: article
+    title: "Higgs Boson Production and Decay at Hadron Colliders"
+    authors:
+      - family-names: "Spira"
+        given-names: "M."
+    journal: "Progress in Particle and Nuclear Physics"
+    volume: 95
+    start: 98
+    end: 159
+    year: 2017
+    url: "https://arxiv.org/abs/1612.07651"
+    notes: "Modern review of Higgs production formulas; engine's gluon-fusion HEFT path uses these conventions."
+  - type: report
+    title: "Handbook of LHC Higgs Cross Sections: 4. Deciphering the Nature of the Higgs Sector"
+    authors:
+      - family-names: "de Florian"
+        given-names: "D."
+      - name: "LHC Higgs Cross-Section Working Group"
+    year: 2016
+    url: "https://arxiv.org/abs/1610.07922"
+    notes: "LHC HWG YR4. Source of tabulated NLO/NNLO K-factors and reference σ values (ggH, VBF, ZH, etc.) used in engine calibration."
+  - type: article
+    title: "Electroweak Radiative Corrections for Collider Physics"
+    authors:
+      - family-names: "Denner"
+        given-names: "A."
+      - family-names: "Dittmaier"
+        given-names: "S."
+    journal: "Physics Reports"
+    volume: 864
+    start: 1
+    end: 163
+    year: 2020
+    notes: "Comprehensive modern review; background for engine's electroweak NLO machinery."
+  - type: article
+    title: "Review of Particle Physics"
+    authors:
+      - name: "Particle Data Group (Workman et al.)"
+    journal: "Progress of Theoretical and Experimental Physics"
+    volume: "2022"
+    start: 083C01
+    year: 2022
+    doi: "10.1093/ptep/ptac097"
+    notes: "PDG 2024 updates used for masses, widths, BRs, and the curated tau-resonance branching ratios."

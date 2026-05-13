@@ -174,7 +174,7 @@ def real_minus_dipoles_2to2_plus_g(
     alpha_s: Optional[float] = None,
     real_process_override: Optional[str] = None,
     use_vegas: bool = False,
-    n_vegas_iter: int = 5,
+    n_vegas_iter: int = 10,
     min_pT_gev: float = 0.0,
     min_invariant_mass_gev: float = 0.0,
 ) -> RealEmissionResult:
@@ -195,6 +195,14 @@ def real_minus_dipoles_2to2_plus_g(
         Number of MC samples (RAMBO flat sampling) for the (N+1)-body integral.
     alpha_s : float
         Strong coupling for the dipole prefactor.
+    use_vegas : bool
+        Use adaptive Vegas importance sampling (cheaper variance for similar
+        n_events).  Default flat RAMBO is robust but converges as 1/√N.
+    n_vegas_iter : int
+        Number of training + production Vegas passes.  Increased from 5 to
+        10 in v0.3 to improve grid adaptation for hard 2→3 K-factor work —
+        more iterations let the importance density converge to the (R-ΣD)
+        shape, reducing K-factor scatter across seeds at fixed n_events.
 
     Returns
     -------

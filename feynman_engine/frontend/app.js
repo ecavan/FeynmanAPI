@@ -306,6 +306,7 @@ const diagramGrid    = document.getElementById("diagram-grid");
 const tabNav         = document.getElementById("tab-nav");
 const tabPanelDiagrams      = document.getElementById("tab-diagrams");
 const tabPanelDistributions = document.getElementById("tab-distributions");
+const tabPanelHadronic      = document.getElementById("tab-hadronic");
 const loading        = document.getElementById("loading");
 const errorBox       = document.getElementById("error-box");
 const modalOverlay   = document.getElementById("modal-overlay");
@@ -982,6 +983,11 @@ obsSelect.addEventListener("change", () => {
     M_inv:      { min: 0,   max: 200,  nbins: 25 },
     M_ll:       { min: 60,  max: 120,  nbins: 24 },
     DR_ll:      { min: 0,   max: 6.28, nbins: 20 },
+    pT_jet:     { min: 0,   max: 200,  nbins: 25 },
+    eta_jet:    { min: -5,  max: 5,    nbins: 20 },
+    M_jj:       { min: 0,   max: 500,  nbins: 25 },
+    pT_boson:   { min: 0,   max: 200,  nbins: 25 },
+    eta_boson:  { min: -5,  max: 5,    nbins: 20 },
   };
   const d = defaults[obs];
   if (d) {
@@ -990,6 +996,68 @@ obsSelect.addEventListener("change", () => {
     histNbins.value = d.nbins;
   }
 });
+
+// ── Observable filtering by final-state content ────────────────────────────
+// When the process changes, hide observables that can't be evaluated (e.g.
+// pT_lepton for a QCD process with no leptons in the final state).
+const LEPTON_PARTS = new Set(["e+","e-","mu+","mu-","tau+","tau-"]);
+const PHOTON_PARTS = new Set(["gamma","a"]);
+const JET_PARTS    = new Set(["u","d","s","c","b","t","u~","d~","s~","c~","b~","t~","g","j"]);
+const BOSON_PARTS  = new Set(["Z","z","W+","w+","W-","w-","H","h"]);
+
+function classifyFinalState(processStr) {
+  // Extract final-state tokens from "X Y -> A B C..."
+  const arrowIdx = processStr.indexOf("->");
+  if (arrowIdx < 0) return { leptons: 0, photons: 0, jets: 0, bosons: 0, totalOut: 0 };
+  const rhs = processStr.slice(arrowIdx + 2).trim();
+  const parts = rhs.split(/\s+/).filter(Boolean);
+  let leptons = 0, photons = 0, jets = 0, bosons = 0;
+  for (const p of parts) {
+    if (LEPTON_PARTS.has(p)) leptons++;
+    else if (PHOTON_PARTS.has(p)) photons++;
+    else if (JET_PARTS.has(p)) jets++;
+    else if (BOSON_PARTS.has(p)) bosons++;
+  }
+  return { leptons, photons, jets, bosons, totalOut: parts.length };
+}
+
+function filterObservables() {
+  const proc = processInput.value.trim();
+  if (!proc) return;
+  const fs = classifyFinalState(proc);
+  for (const opt of obsSelect.options) {
+    const needs = opt.dataset.needs || "any";
+    let show = true;
+    switch (needs) {
+      case "any":      show = true;                    break;
+      case "lepton":   show = fs.leptons >= 1;         break;
+      case "dilepton": show = fs.leptons >= 2;         break;
+      case "photon":   show = fs.photons >= 1;         break;
+      case "jet":      show = fs.jets >= 1;            break;
+      case "dijet":    show = fs.jets >= 2;            break;
+      case "boson":    show = fs.bosons >= 1;          break;
+    }
+    opt.hidden = !show;
+    opt.disabled = !show;
+  }
+  // If the currently-selected option got hidden, pick the first visible one
+  if (obsSelect.options[obsSelect.selectedIndex].hidden) {
+    for (let i = 0; i < obsSelect.options.length; i++) {
+      if (!obsSelect.options[i].hidden) {
+        obsSelect.selectedIndex = i;
+        obsSelect.dispatchEvent(new Event("change"));
+        break;
+      }
+    }
+  }
+}
+
+if (processInput) {
+  processInput.addEventListener("input", filterObservables);
+  processInput.addEventListener("change", filterObservables);
+  // Run once on page load
+  filterObservables();
+}
 
 histComputeBtn.addEventListener("click", computeHistogram);
 
@@ -1189,8 +1257,86 @@ function activateTab(tabId) {
   });
   tabPanelDiagrams.classList.toggle("hidden", tabId !== "diagrams");
   tabPanelDistributions.classList.toggle("hidden", tabId !== "distributions");
+  if (tabPanelHadronic) tabPanelHadronic.classList.toggle("hidden", tabId !== "hadronic");
 }
 
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
+
+// ── Hadronic σ(pp) tab ───────────────────────────────────────────────────────
+const hpComputeBtn = document.getElementById("hp-compute-btn");
+if (hpComputeBtn) {
+  hpComputeBtn.addEventListener("click", async () => {
+    const proc    = document.getElementById("hp-process").value.trim();
+    const sqrts   = document.getElementById("hp-sqrts").value;
+    const theory  = document.getElementById("hp-theory").value;
+    const order   = document.getElementById("hp-order").value;
+    const pdf     = document.getElementById("hp-pdf").value;
+    const muf     = document.getElementById("hp-muf").value;
+    const mur     = document.getElementById("hp-mur").value;
+    const mllmin  = document.getElementById("hp-mllmin").value;
+    const mllmax  = document.getElementById("hp-mllmax").value;
+    const ptlmin  = document.getElementById("hp-ptlmin").value;
+    const minpt   = document.getElementById("hp-minpt").value;
+    const statusEl = document.getElementById("hp-status");
+    const resultEl = document.getElementById("hp-result");
+
+    statusEl.textContent = "Computing σ(pp)…";
+    resultEl.innerHTML = "";
+
+    const params = new URLSearchParams({
+      process: proc, sqrt_s: sqrts, order: order, pdf_name: pdf,
+      m_ll_min: mllmin, m_ll_max: mllmax, pT_l_min: ptlmin, min_pT: minpt,
+    });
+    if (theory) params.set("theory", theory);
+    if (muf)    params.set("mu_f", muf);
+    if (mur)    params.set("mu_r", mur);
+
+    try {
+      const res = await fetch(`${API_BASE}/amplitude/hadronic-cross-section?${params}`);
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = `Error: ${data.detail || res.statusText}`;
+        return;
+      }
+      statusEl.textContent = "";
+      const sigma = data.sigma_pb;
+      const fmt = (v, p = 4) => (v === undefined || v === null ? "—" : Number(v).toPrecision(p));
+      const rows = [
+        ["σ(pp)", `${fmt(sigma)} pb`],
+        ["order", data.order || "?"],
+        ["method", data.method || "?"],
+        ["PDF", data.pdf || "?"],
+        ["μ_F", data.mu_f_gev ? `${fmt(data.mu_f_gev, 4)} GeV` : "—"],
+        ["μ_R", data.mu_r_gev ? `${fmt(data.mu_r_gev, 4)} GeV` : "—"],
+        ["K-factor", data.k_factor !== undefined ? fmt(data.k_factor, 3) : "—"],
+        ["trust", data.trust_level || "—"],
+      ];
+      let html = `<table class="results-table">
+        ${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}
+      </table>`;
+      if (Array.isArray(data.channels) && data.channels.length) {
+        html += `<div class="channels-list"><strong>Channels:</strong><ul>`;
+        for (const ch of data.channels) {
+          const part = ch.partonic || "?";
+          const frac = ch.fraction !== undefined ? ` (${(ch.fraction * 100).toFixed(1)}%)` : "";
+          html += `<li>${part}: ${fmt(ch.sigma_pb)} pb${frac}</li>`;
+        }
+        html += `</ul></div>`;
+      }
+      if (data.accuracy_caveat) {
+        html += `<div class="caveat-banner"><strong>Caveat:</strong> ${data.accuracy_caveat}</div>`;
+      }
+      if (data.ir_cut_warning) {
+        html += `<div class="caveat-banner"><strong>IR cut:</strong> ${data.ir_cut_warning}</div>`;
+      }
+      if (data.description) {
+        html += `<p class="histogram-note">${data.description}</p>`;
+      }
+      resultEl.innerHTML = html;
+    } catch (err) {
+      statusEl.textContent = `Network error: ${err.message}`;
+    }
+  });
+}

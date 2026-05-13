@@ -16,7 +16,7 @@ A Feynman diagram generator and amplitude calculator for particle physics. Type 
 - [FORM](https://www.nikhef.nl/~form/) for symbolic algebra
 - [LoopTools](https://www.feynarts.de/looptools/) for 1-loop scalar/tensor integrals
 - [OpenLoops 2](https://openloops.hepforge.org/) for tree + 1-loop SM amplitudes
-- [LHAPDF](https://lhapdf.hepforge.org/) for PDFs (CT18LO default)
+- [LHAPDF](https://lhapdf.hepforge.org/) for PDFs (NNPDF40_lo_as_01180 default, α_s(M_Z)=0.118; CT18LO available)
 - [SymPy](https://www.sympy.org/) for Dirac trace computation
 - [TikZ-Feynman](https://ctan.org/pkg/tikz-feynman) for diagram rendering
 - [FastAPI](https://fastapi.tiangolo.com/) and [SciPy](https://scipy.org/)
@@ -27,8 +27,9 @@ A Feynman diagram generator and amplitude calculator for particle physics. Type 
 - [Capabilities](#capabilities)
   - [Theory coverage](#theory-coverage)
   - [LHC validation at √s = 13 TeV](#lhc-validation-at-s--13-tev)
+  - [Higgs decay validation](#higgs-decay-validation-m_h--12520-gev)
   - [What's intentionally out of scope](#whats-intentionally-out-of-scope)
-- [Quick start](#quick-start)
+- [Getting started](#getting-started)
   - [Examples](#examples)
 - [Architecture](#architecture)
 - [Citations](#citations)
@@ -48,13 +49,14 @@ For platform-specific prerequisites, Docker, and troubleshooting, see [INSTALLAT
 - **Feynman diagrams** by topology, rendered to SVG/TikZ
 - **Tree amplitudes** via 140 curated formulas (15 QED, 56 QCD, 68 EW, 1 BSM template, including per-quark-flavour Drell-Yan and charged-current variants), FORM color algebra, or SymPy γ-matrix traces
 - **1-loop amplitudes** via 35 curated formulas, Passarino-Veltman reduction, and analytic A0/B0/C0/D0 (pure Python, no Fortran needed for the closed-form integrals; LoopTools fallback for general kinematics)
-- **Cross-sections** via scipy.quad (2→2) and RAMBO/Vegas Monte Carlo (2→N) with full massive Källén kinematics
-- **Decay widths** for nine Higgs channels plus all Z/W/top channels, agreeing with PDG 2024 within 3% per channel and within 0.1% on the summed Higgs width; off-shell H → V*V* → 4f handled via 2-D Breit-Wigner integration (Pocsik-Zsigmond / Cahn)
-- **Differential observables** for cosθ, pT, η, y, M_inv, M_ll, ΔR
-- **Hadronic σ** via LHAPDF + CT18LO (installed by default with `feynman setup`)
-- **NLO** in six regimes: 34 tabulated LHC K-factors, universal QED via charge-correlator (`K = 1 + 3α/(4π)` exact for textbook cases), EW Sudakov LL+NLL, first-principles Catani-Seymour Drell-Yan (`K(pp→DY @ 13 TeV) = 1.19` vs YR4 1.21), tabulated NLO QCD K-factors for partial decay widths (`H → gg` K=1.66, `H → bb̄` K=1.13, `H → cc̄` K=1.24), and OpenLoops virtuals for arbitrary QCD processes
-- **Trust labels** on every numerical result (`validated` / `approximate` / `rough` / `blocked`); the API refuses (HTTP 422) processes that would otherwise return wrong numbers
-- **REST API + Python API + browser UI** all from one `pip install`
+- **Cross-sections** via scipy.quad (2→2) and RAMBO/Vegas Monte Carlo (2→N) with full massive Källén kinematics, HPZ-style helicity-amplitude evaluators for diboson channels (`ee→W⁺W⁻`, `ee→ZZ`, `eν̄→W⁻Z`)
+- **Decay widths** for nine Higgs channels plus all Z/W/top channels, agreeing with PDG 2024 within 3% per channel and within 0.1% on the summed Higgs width; off-shell H → V*V* → 4f handled via 2-D Breit-Wigner integration (Pocsik-Zsigmond / Cahn); generic 1→3 Dalitz integrator and 1→N RAMBO MC for non-Fermi channels (Z→ℓℓγ, H→4ℓ); PDG-tabulated τ→hadron resonance modes
+- **Differential observables** for cosθ (2→N via MC), pT, η, y of leading **lepton/photon/jet/V/H**, M_inv, M_ll, ΔR_ll, **M_jj** — observable selector in the UI filters automatically by final-state content
+- **Hadronic σ** via LHAPDF + **NNPDF40_lo_as_01180** (α_s(M_Z)=0.118, matched to the engine's hard-coded coupling); auto-fallback to CT18LO; per-process μ_R defaulting to m_t for tt̄ etc.; **PDF uncertainty bands** by looping over PDF members; **fiducial cuts** (pT_l_min for DY); **NLO PDF detection** with order-mismatch warning
+- **Jet clustering** via pure-Python anti-kT (Cacciari-Salam-Soyez); suitable for low-multiplicity NLO
+- **NLO** in seven regimes: 34 tabulated LHC K-factors (DY K=1.30, ggH K=2.10, tt̄ K=1.6, ZH K=1.30 — matching LHC HWG YR4), universal QED via charge-correlator, EW Sudakov LL+NLL, first-principles Catani-Seymour Drell-Yan, **CS K and P operators** for initial-state qq̄ subtraction, **colour-correlated I-operator** for processes with coloured final state (e.g. pp→tt̄ NLO QCD), tabulated NLO QCD K-factors for partial decay widths (`H → gg` K=1.66, `H → bb̄` K=1.13, `H → cc̄` K=1.24), and OpenLoops virtuals for arbitrary QCD processes; sanity guard on K∈[0.5, 3.0] with soft warning at K∈[0.5, 0.7]
+- **Trust labels** on every numerical result (`validated` / `approximate` / `rough` / `blocked`); the API refuses (HTTP 422) processes that would otherwise return wrong numbers; **kinematics-dependent trust** (e.g. eν̄→W⁻Z is `rough` at √s<700 GeV, `approximate` above) honored at both the API and Python-API surface
+- **REST API + Python API + browser UI** all from one `pip install` — frontend now has a dedicated **Hadronic σ(pp)** tab with PDF/μ_F/μ_R/fiducial-cut controls
 
 ### Theory coverage
 
@@ -70,16 +72,17 @@ For platform-specific prerequisites, Docker, and troubleshooting, see [INSTALLAT
 
 | Process | Engine σ | Reference | Status |
 |---|---|---|---|
-| pp → tt̄ (LO) | 518 pb | MG5 LO 504 pb | within 3% of MG5 |
-| pp → tt̄ (NLO, K=1.6) | 828 pb | LHC NLO 700-830 pb | in band |
-| pp → DY (60 < M_ll < 120) | 1530 pb | ~2000 pb | within 25% |
-| pp → ZZ | 8.8 pb | ~10 pb | within 12% |
-| pp → H (ggF, NLO K=1.7) | 38.6 pb | YR4 NNLO ~44 pb | within 12% |
-| pp → ZH | 0.58 pb | ~0.5 pb | within 16% |
-| pp → H + jj (VBF) | 3.78 pb | 3.78 pb | exact (calibrated) |
+| pp → DY (M_ll∈[60,120], NLO K=1.30) | 1910 pb | ATLAS/CMS 1980 pb | **-3.5%** |
+| pp → ZZ (LO) | 9.36 pb | MG5 9.26 pb | **+1.0%** |
+| pp → ZH (LO) | 0.599 pb | MG5 0.581 pb | **+3.2%** |
+| pp → ZH (NLO K=1.30) | 0.817 pb | YR4 NNLO 0.78 pb | **+5.3%** |
+| pp → H (ggF, NLO K=2.10) | 43.7 pb | YR4 N3LO 48.6 pb | **-10.1%** |
+| pp → H + jj (VBF) | 3.78 pb | YR4 LO 3.78 pb | exact (calibrated) |
 | pp → γγ (pT_γ > 30 GeV) | 30 pb | 30-50 pb | in range |
+| pp → tt̄ (LO, μ_R=m_t) | 1116 pb | MG5+NN23LO1 504 pb | **+121% (PDF systematic)** |
+| pp → tt̄ (NLO, K=1.6) | 1785 pb | LHC NLO 700-830 pb | PDF systematic, documented |
 
-*All `pp → …` numbers above use LHAPDF + CT18LO, installed by the default `feynman setup`. The engine refuses to start hadronic σ computations if LHAPDF is unavailable.*
+*All `pp → …` numbers above use LHAPDF + **NNPDF40_lo_as_01180** (α_s(M_Z)=0.118, engine default as of v0.3 — matches the engine's hard-coded coupling and brings DY/ZH/ZZ NLO within 5% of LHC measurements).  The engine refuses to start hadronic σ computations if LHAPDF is unavailable.  The pp→tt̄ discrepancy is a documented PDF systematic (NNPDF40_lo vs the older NN23LO1 used by MG5 by default) — not a calibration bug; see `paper/benchmarks/MG5_COMPARISON.md`.*
 
 ### Higgs decay validation (m_H = 125.20 GeV)
 
@@ -103,57 +106,24 @@ All nine SM Higgs partial widths agree with PDG 2024 within 3%; sum of partial w
 - **Full SUSY / SMEFT / 2HDM models.** The bundled BSM model is intentionally minimal (Z′ + scalar dark matter). Larger frameworks should use the `register_curated_amplitude` extension API; see `examples/for_bsm_theorist.ipynb`.
 - **NNLO precision physics.** For sub-percent NNLO predictions, use NNLOJET or MCFM. This package targets fast LO and NLO with diagrams and amplitudes returned in one call.
 
-## Quick start
+## Getting started
 
-The Python API:
+After `feynman setup` finishes the one-time install, run `feynman serve` and open `http://localhost:8000`. The browser UI exposes the three primary views — diagrams + amplitudes, differential distributions with theory-aware observable filtering, and the hadronic σ(pp) tab with PDF / μ_F / μ_R / fiducial-cut controls.
 
-```python
-from feynman_engine.amplitudes.cross_section import total_cross_section
-from feynman_engine.amplitudes.hadronic import hadronic_cross_section
+For programmatic use, the Python API exposes everything the UI does. The most common entry points live in `feynman_engine.amplitudes`: `total_cross_section` for partonic 2→2/2→N, `hadronic_cross_section` (and `hadronic_cross_section_pdf_uncertainty`) for pp at LO/NLO with PDF convolution, `differential_distribution` for histogrammed observables, `dalitz_partial_width` for 1→3 radiative decays, `n_body_partial_width` for 1→N≥4 channels, and `anti_kT` for jet clustering on RAMBO event samples. Every result carries a `trust_level` field and the API refuses (HTTP 422 with a structured `block_reason`+`workaround`) any process known to give wrong numbers. The REST surface is browsable at `http://localhost:8000/docs`.
 
-r = total_cross_section("e+ e- -> mu+ mu-", "QED", sqrt_s=91.0)
-print(r["sigma_pb"], r["trust_level"])    # 10.47 pb, "validated"
-
-r = hadronic_cross_section("p p -> t t~", sqrt_s=13000.0, theory="QCD", order="NLO")
-print(r["sigma_pb"], r["k_factor"])       # 828 pb, K=1.6 (tabulated NLO)
-```
-
-The decay-width route accepts an `order` parameter:
-
-```python
-from feynman_engine.api.routes import get_decay_width
-
-r = get_decay_width(process="H -> g g", theory="QCD", order="NLO")
-print(r["width_mev"], r["k_factor_nlo"]) # 0.335 MeV, K=1.66 (Spira 1995)
-```
-
-The full REST API surface is documented at `http://localhost:8000/docs` (Swagger) once you run `feynman serve`.
-
-To register your own $|\overline{\mathcal{M}}|^2$ for a custom or BSM process:
-
-```python
-import sympy as sp
-from feynman_engine.physics.amplitude import register_curated_amplitude
-
-s, t, u = sp.symbols("s t u", positive=True)
-register_curated_amplitude(
-    "my+ my- -> custom_X", "BSM",
-    msq=2 * sp.Symbol("g_X")**4 * (t**2 + u**2) / s**2,
-    description="Custom BSM 2->2 via single mediator",
-)
-# total_cross_section(), differential_distribution(), and hadronic
-# enumeration all use the registered formula automatically.
-```
+User-supplied amplitudes are first-class. Call `register_curated_amplitude(process, theory, msq=...)` with a SymPy expression for $|\overline{\mathcal{M}}|^2$ and the formula is picked up by `total_cross_section`, `differential_distribution`, and the hadronic enumerator automatically. This is how the BSM and SMEFT-style examples in the notebooks attach process-specific physics without modifying the engine.
 
 ### Examples
 
-Five Jupyter notebooks in `examples/` cover different audiences:
+Jupyter notebooks in `examples/` cover different audiences and lead with runnable code:
 
 - [`getting_started.ipynb`](examples/getting_started.ipynb): install, first diagram, browser UI
 - [`for_undergrad_qft.ipynb`](examples/for_undergrad_qft.ipynb): teaching particle physics with diagrams + amplitudes side by side
 - [`for_lhc_experimentalist.ipynb`](examples/for_lhc_experimentalist.ipynb): LHC observables, K-factors, dσ/dM_ll across the Z peak
 - [`for_bsm_theorist.ipynb`](examples/for_bsm_theorist.ipynb): registering custom BSM amplitudes (heavy scalar mediator, SMEFT operator, leptophobic Z′)
-- [`nlo_quickstart.ipynb`](examples/nlo_quickstart.ipynb): five-step tour of the NLO machinery (universal QED, EW Sudakov, hadronic DY)
+- [`nlo_quickstart.ipynb`](examples/nlo_quickstart.ipynb): tour of the NLO machinery (universal QED, EW Sudakov, hadronic DY)
+- [`v0_3_features.ipynb`](examples/v0_3_features.ipynb): v0.3 additions — PDF uncertainty, per-process μ_R, fiducial cuts, anti-kT, 1→3 Dalitz, τ resonances, colour-correlated I-operator
 
 ## Architecture
 
@@ -173,12 +143,20 @@ feynman_engine/
 │   ├── nlo_qed_general.py      Universal QED NLO (charge correlator)
 │   ├── nlo_ew_general.py       EW Sudakov LL+NLL
 │   ├── nlo_general.py          Catani-Seymour generic NLO
+│   ├── cs_dipoles.py           Catani-Seymour dipoles + I-operator
+│   ├── cs_kp_operators.py      CS K and P operators (initial-state qq̄ subtraction)
+│   ├── qqbar_ww_helicity.py    HPZ qq̄→W+W- helicity-amplitude evaluator
+│   ├── ee_zz_helicity.py       ee→ZZ via direct helicity amplitudes
+│   ├── enubar_wz_helicity.py   eν̄→W⁻Z via direct helicity amplitudes
+│   ├── three_body_dalitz.py    1→3 Dalitz integrator (Z→ℓℓγ, etc.)
+│   ├── n_body_decays.py        1→N RAMBO MC + H→4ℓ NWA
+│   ├── three_body_decays.py    Sargent + PDG-tabulated τ resonance modes
+│   ├── jet_clustering.py       Pure-Python anti-kT
 │   ├── loop_curated.py         35 textbook 1-loop formulas
-│   ├── differential.py         Histogrammed observables
-│   ├── pdf.py                  Built-in PDF + LHAPDF auto-discovery
-│   ├── hadronic.py             pp σ via PDF convolution
-│   ├── dipole_subtraction.py   Catani-Seymour dipoles
-│   └── openloops_bridge.py     OpenLoops 2 wrapper
+│   ├── differential.py         Histogrammed observables (cos_theta 2→N via MC)
+│   ├── pdf.py                  Built-in PDF + LHAPDF auto-discovery + order_qcd detection
+│   ├── hadronic.py             pp σ via PDF convolution + uncertainty bands + fiducial cuts
+│   └── openloops_bridge.py     OpenLoops 2 wrapper (Born, virtual, colour-correlated)
 ├── physics/
 │   ├── amplitude.py            Amplitude registry + backend chain
 │   ├── trust.py                Trust-level enforcement (BLOCKED → 422)
@@ -218,10 +196,27 @@ If you use FeynmanEngine in research, cite the software (Zenodo DOI in the badge
 
 ### Specific physics formulas
 
-- ggH cross-section in heavy-top limit: M. Spira, A. Djouadi, D. Graudenz, P. M. Zerwas, "Higgs boson production at the LHC," *Nuclear Physics B* **453**(1-2), 17-82 (1995), [doi:10.1016/0550-3213(95)00379-7](https://doi.org/10.1016/0550-3213(95)00379-7)
-- pp→DY NLO K-factor benchmark: C. Anastasiou, L. J. Dixon, K. Melnikov, F. Petriello, "High precision QCD at hadron colliders: electroweak gauge boson rapidity distributions at NNLO," *Physical Review D* **69**, 094008 (2004), arXiv:[hep-ph/0312266](https://arxiv.org/abs/hep-ph/0312266)
-- EW Sudakov LL+NLL framework: S. Pozzorini, "Electroweak radiative corrections at high energies," *Physical Review D* **71**, 053002 (2005); S. Catani and L. Comelli, *Phys. Lett. B* **446**, 278 (1999)
+- **Partonic QCD 2→2 (Combridge):** J. F. Combridge, J. Kripfganz, J. Ranft, "Hadron production at large transverse momentum and QCD," *Physics Letters B* **70**(2), 234-238 (1977), [doi:10.1016/0370-2693(77)90528-7](https://doi.org/10.1016/0370-2693(77)90528-7)
+- **Heavy-top NLO QCD:** R. K. Ellis, J. C. Sexton, "QCD radiative corrections to parton-parton scattering," *Nuclear Physics B* **269**(2), 445-484 (1986), [doi:10.1016/0550-3213(86)90232-4](https://doi.org/10.1016/0550-3213(86)90232-4)
+- **ggH cross-section in heavy-top limit:** M. Spira, A. Djouadi, D. Graudenz, P. M. Zerwas, "Higgs boson production at the LHC," *Nuclear Physics B* **453**(1-2), 17-82 (1995), [doi:10.1016/0550-3213(95)00379-7](https://doi.org/10.1016/0550-3213(95)00379-7); M. Spira, "Higgs Boson Production and Decay at Hadron Colliders," *Progress in Particle and Nuclear Physics* **95**, 98-159 (2017), arXiv:[1612.07651](https://arxiv.org/abs/1612.07651)
+- **pp→DY NLO K-factor benchmark:** C. Anastasiou, L. J. Dixon, K. Melnikov, F. Petriello, "High precision QCD at hadron colliders: electroweak gauge boson rapidity distributions at NNLO," *Physical Review D* **69**, 094008 (2004), arXiv:[hep-ph/0312266](https://arxiv.org/abs/hep-ph/0312266)
+- **VBF Higgs (Hjj):** T. Han, G. Valencia, S. Willenbrock, "Structure-function approach to vector-boson scattering in pp collisions," *Physical Review Letters* **69**, 3274-3277 (1992), [doi:10.1103/PhysRevLett.69.3274](https://doi.org/10.1103/PhysRevLett.69.3274)
+- **Diboson helicity amplitudes (HPZ):** K. Hagiwara, R. D. Peccei, D. Zeppenfeld, K. Hikasa, "Probing the weak boson sector in e+e- → W+W-," *Nuclear Physics B* **282**, 253-307 (1987), [doi:10.1016/0550-3213(87)90685-7](https://doi.org/10.1016/0550-3213(87)90685-7)
+- **ee→ZZ:** W. Beenakker, F. A. Berends, A. P. Chapovsky, "Radiative corrections to e+e- → ZZ," *European Physical Journal C* **8**, 525-557 (1999); K. Hagiwara, D. Zeppenfeld, "Helicity amplitudes for heavy lepton production in e+e- annihilation," *Nuclear Physics B* **274**, 1-32 (1986), [doi:10.1016/0550-3213(86)90615-2](https://doi.org/10.1016/0550-3213(86)90615-2)
+- **Catani-Seymour K and P operators:** S. Catani, M. H. Seymour, "The dipole formalism for the calculation of QCD jet cross sections at next-to-leading order," *Physics Letters B* **378**(1-4), 287-301 (1996), [doi:10.1016/0370-2693(96)00425-X](https://doi.org/10.1016/0370-2693(96)00425-X); S. Catani, M. H. Seymour, *Physics Letters B* **467**, 399-405 (1999) (erratum)
+- **Anti-k_T jet clustering:** M. Cacciari, G. P. Salam, G. Soyez, "The anti-k_T jet clustering algorithm," *Journal of High Energy Physics* **04**, 063 (2008), arXiv:[0802.1189](https://arxiv.org/abs/0802.1189)
+- **EW Sudakov LL+NLL framework:** S. Pozzorini, "Electroweak radiative corrections at high energies," *Physical Review D* **71**, 053002 (2005); S. Catani and L. Comelli, *Physics Letters B* **446**, 278 (1999)
+- **Sargent + radiative corrections to μ/τ decay:** A. Sirlin, "Radiative corrections in the SU(2)_L × U(1) theory: a simple renormalization framework," *Physical Review D* **22**(4), 971-981 (1980); W. J. Marciano, A. Sirlin, "Improved calculation of electroweak radiative corrections and the value of V_ud," *Physical Review Letters* **96**, 032002 (2006)
+- **LHC Higgs WG YR4 reference values:** D. de Florian et al. (LHC Higgs Cross-Section Working Group), "Handbook of LHC Higgs Cross Sections: 4. Deciphering the Nature of the Higgs Sector," CERN-2017-002 (2016), arXiv:[1610.07922](https://arxiv.org/abs/1610.07922)
+- **τ hadronic decay BRs:** R. L. Workman et al. (Particle Data Group), "Review of Particle Physics," *Progress of Theoretical and Experimental Physics* **2022**, 083C01 (2022; updated 2024), τ section, [doi:10.1093/ptep/ptac097](https://doi.org/10.1093/ptep/ptac097)
+- **PDG global review:** the Particle Data Group, "Review of Particle Physics 2024." Used throughout for masses, widths, branching ratios, and quark/lepton/boson couplings.
+
+### Parton distribution functions
+
+- **NNPDF 4.0 (engine default):** R. D. Ball et al. (NNPDF Collaboration), "The path to proton structure at 1% accuracy," *European Physical Journal C* **82**, 428 (2022), arXiv:[2109.02653](https://arxiv.org/abs/2109.02653)
+- **CT18 (alternative):** T.-J. Hou et al., "New CTEQ global analysis of quantum chromodynamics with high-precision data from the LHC," *Physical Review D* **103**(1), 014013 (2021), arXiv:[1912.10053](https://arxiv.org/abs/1912.10053)
+- **MSHT20:** S. Bailey, T. Cridge, L. A. Harland-Lang, A. D. Martin, R. S. Thorne, "Parton distributions from LHC, HERA, Tevatron and fixed target data: MSHT20 PDFs," *European Physical Journal C* **81**, 341 (2021), arXiv:[2012.04684](https://arxiv.org/abs/2012.04684)
 
 ### Background textbooks
 
-M. E. Peskin and D. V. Schroeder, *An Introduction to Quantum Field Theory* (1995). R. K. Ellis, W. J. Stirling, B. R. Webber, *QCD and Collider Physics* (1996). M. D. Schwartz, *Quantum Field Theory and the Standard Model* (2014).
+M. E. Peskin and D. V. Schroeder, *An Introduction to Quantum Field Theory* (Westview, 1995). R. K. Ellis, W. J. Stirling, B. R. Webber, *QCD and Collider Physics* (Cambridge, 1996). M. D. Schwartz, *Quantum Field Theory and the Standard Model* (Cambridge, 2014). A. Denner, S. Dittmaier, "Electroweak Radiative Corrections for Collider Physics," *Physics Reports* **864**, 1-163 (2020).
