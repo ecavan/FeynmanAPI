@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "FeynmanEngine"
-version: "0.2.2"
+version: "0.2.3"
 type: software
 license: "GPL-3.0-only"
 doi: "10.5281/zenodo.20149335"

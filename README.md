@@ -1,9 +1,9 @@
 # FeynmanEngine
 
-[![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.2/)
-[![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.2/)
+[![PyPI](https://img.shields.io/pypi/v/feynman-engine?label=PyPI&color=blue&cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.3/)
+[![Python](https://img.shields.io/pypi/pyversions/feynman-engine?cacheSeconds=300)](https://pypi.org/project/feynman-engine/0.2.3/)
 [![License](https://img.shields.io/pypi/l/feynman-engine?cacheSeconds=300)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20149335.svg?v=0.2.2)](https://doi.org/10.5281/zenodo.20149335)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20149335.svg?v=0.2.3)](https://doi.org/10.5281/zenodo.20149335)
 
 A Feynman diagram generator and amplitude calculator for particle physics. Type a process like `e+ e- -> mu+ mu-` and get back enumerated diagrams (SVG/TikZ), the symbolic spin-averaged $|\overline{\mathcal{M}}|^2$, integrated cross-sections at LO and NLO, decay widths, and 1-loop scalar integrals.
 
