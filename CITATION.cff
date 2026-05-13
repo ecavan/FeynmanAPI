@@ -4,10 +4,10 @@ title: "FeynmanEngine"
 version: "0.2.3"
 type: software
 license: "GPL-3.0-only"
-doi: "10.5281/zenodo.20149335"
+doi: "10.5281/zenodo.20162053"
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.20149335"
+    value: "10.5281/zenodo.20162053"
     description: "Concept DOI for this version of FeynmanEngine"
 abstract: "A Feynman diagram generator and amplitude calculator for particle physics with a Python API, browser UI, and packaged FastAPI service. Supports tree- and one-loop amplitudes, LO/NLO cross-sections (analytic K-factors, tabulated LHC ratios, Catani-Seymour subtraction with K and P operators for initial-state qq̄, colour-correlated I-operator, OpenLoops virtuals, EW Sudakov LL+NLL), HPZ-style helicity amplitudes for diboson channels, fiducial cuts (pT_l_min, eta_l_max) via 2D PDF convolution, anti-k_T jet clustering, generic 1→N decay-width integrators (Dalitz + RAMBO), PDG-tabulated τ resonance modes, PDF uncertainty bands, and PDF-convolved hadronic predictions with the NNPDF4.0 LO default."
 authors:
